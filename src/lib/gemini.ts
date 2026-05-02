@@ -52,7 +52,7 @@ export async function generateJSON<T>(prompt: string): Promise<T> {
       model: MODEL_ID,
       contents: prompt,
     });
-    const text = (response as unknown as { text: string }).text;
+    const text = (response as { text?: unknown }).text;
     if (typeof text !== 'string') {
       throw new Error('Gemini response had no text payload.');
     }

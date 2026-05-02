@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { extractJSON, withRetry } from '@/lib/gemini';
+import { extractJSON, withRetry, generateJSON } from '@/lib/gemini';
+
+const generateContentMock = vi.fn();
+
+vi.mock('@google/genai', () => {
+  class GoogleGenAI {
+    models = { generateContent: generateContentMock };
+  }
+  return { GoogleGenAI };
+});
 
 describe('extractJSON', () => {
   it('parses a plain JSON string', () => {
@@ -76,5 +85,46 @@ describe('withRetry', () => {
       .mockRejectedValueOnce(new Error('boom'));
     await expect(withRetry(fn, { attempts: 3, baseDelayMs: 10 })).rejects.toThrow('boom');
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('generateJSON', () => {
+  beforeEach(() => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    generateContentMock.mockReset();
+  });
+
+  it('parses a fenced JSON response into the requested type', async () => {
+    generateContentMock.mockResolvedValueOnce({
+      text: '```json\n{"name": "ada", "score": 42}\n```',
+    });
+
+    type Result = { name: string; score: number };
+    const result = await generateJSON<Result>('prompt');
+
+    expect(result).toEqual({ name: 'ada', score: 42 });
+    expect(generateContentMock).toHaveBeenCalledTimes(1);
+    expect(generateContentMock).toHaveBeenCalledWith({
+      model: 'gemini-2.5-flash',
+      contents: 'prompt',
+    });
+  });
+
+  it('throws when response.text is missing or not a string', async () => {
+    generateContentMock.mockResolvedValueOnce({ text: undefined });
+    await expect(generateJSON('prompt')).rejects.toThrow(
+      'Gemini response had no text payload.',
+    );
+
+    generateContentMock.mockResolvedValueOnce({ text: 123 });
+    await expect(generateJSON('prompt')).rejects.toThrow(
+      'Gemini response had no text payload.',
+    );
+  });
+
+  it('propagates non-429 SDK errors without retrying', async () => {
+    generateContentMock.mockRejectedValueOnce(new Error('sdk failed'));
+    await expect(generateJSON('prompt')).rejects.toThrow('sdk failed');
+    expect(generateContentMock).toHaveBeenCalledTimes(1);
   });
 });
