@@ -1,4 +1,4 @@
-import type { ParsedSpec } from '@/lib/types';
+import type { ParsedSpec, Issue } from '@/lib/types';
 
 export function buildParseSpecPrompt(spec: string): string {
   return `You are an evaluation engineer. Read the AI feature spec below and return a single JSON object describing it.
@@ -98,4 +98,71 @@ Rules:
 - 4-6 dimensions.
 - weight values are floats in [0, 1] and the sum must equal 1.0 (within ±0.01).
 - Output JSON only.`;
+}
+
+function renderIssues(issues: Issue[]): string {
+  return issues
+    .map(
+      (i) =>
+        `- [${i.severity}] ${i.field}: ${i.description} Suggestion: ${i.suggestion}`,
+    )
+    .join('\n');
+}
+
+export function buildParseSpecCritiquePrompt(
+  spec: string,
+  parsed: ParsedSpec,
+): string {
+  return `You are an evaluation engineer reviewing a parsed feature spec.
+
+Original spec:
+"""
+${spec}
+"""
+
+Parsed JSON:
+${JSON.stringify(parsed)}
+
+Evaluate the parsed JSON against this checklist. For every violation, emit one issue:
+1. Domain correctness — domain is one of legal | sales | healthcare | general and matches the spec.
+2. Feature summary fidelity — the feature field is a faithful one-line summary; no facts not present in the spec.
+3. Inputs completeness — every distinct input the AI receives, per the spec, is in inputs.
+4. Outputs completeness — every distinct output the AI produces is in outputs.
+5. Constraints completeness — every requirement the output must satisfy is in constraints.
+6. No hallucination — no item in inputs/outputs/constraints is unsupported by the spec.
+7. Granularity — items are 1-6 short, specific bullets per list; no duplicates.
+
+For each violation, emit an issue object:
+{
+  "field": "JSON path into the parsed object, e.g. inputs[0]",
+  "severity": "major" | "minor",
+  "description": "what is wrong",
+  "suggestion": "how to fix"
+}
+
+Use "major" only for issues that would invalidate downstream test/rubric generation. Style nits are "minor".
+
+Respond with ONLY this JSON (no prose, no markdown):
+{ "issues": [ ... ] }
+
+If everything is correct, respond with: { "issues": [] }`;
+}
+
+export function buildParseSpecRevisePrompt(
+  current: ParsedSpec,
+  issues: Issue[],
+): string {
+  return `You produced this parsed spec JSON:
+${JSON.stringify(current)}
+
+A reviewer found these issues:
+${renderIssues(issues)}
+
+Produce a corrected ParsedSpec that:
+1. Fixes EVERY listed issue.
+2. Preserves all unflagged content unchanged.
+3. Returns the SAME schema shape — exactly these top-level fields: feature, inputs, outputs, constraints, domain.
+4. Does not introduce new fields and does not omit any.
+
+Respond with ONLY the corrected JSON object (no prose, no markdown).`;
 }

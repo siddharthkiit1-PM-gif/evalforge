@@ -3,8 +3,10 @@ import {
   buildParseSpecPrompt,
   buildGenerateTestsPrompt,
   buildGenerateRubricPrompt,
+  buildParseSpecCritiquePrompt,
+  buildParseSpecRevisePrompt,
 } from '@/lib/prompts';
-import type { ParsedSpec } from '@/lib/types';
+import type { ParsedSpec, Issue } from '@/lib/types';
 
 const SAMPLE_PARSED: ParsedSpec = {
   feature: 'Cold email drafter',
@@ -78,5 +80,65 @@ describe('buildGenerateRubricPrompt', () => {
   it('asks weights to sum to 1', () => {
     const p = buildGenerateRubricPrompt(SAMPLE_PARSED);
     expect(p).toMatch(/sum.*1/i);
+  });
+});
+
+const sampleParsed: ParsedSpec = {
+  feature: 'Extracts obligations from contract PDFs.',
+  inputs: ['contract pdf'],
+  outputs: ['table of obligations'],
+  constraints: ['must include due date'],
+  domain: 'legal',
+};
+
+const sampleSpec = 'AI extracts obligations from a contract pdf.';
+
+const sampleIssue: Issue = {
+  field: 'feature',
+  severity: 'major',
+  description: 'Summary omits clause-level extraction.',
+  suggestion: 'Mention clause-level extraction explicitly.',
+};
+
+describe('buildParseSpecCritiquePrompt', () => {
+  it('embeds the original spec, the parsed JSON, and the JSON-only output instruction', () => {
+    const prompt = buildParseSpecCritiquePrompt(sampleSpec, sampleParsed);
+    expect(prompt).toContain(sampleSpec);
+    expect(prompt).toContain(JSON.stringify(sampleParsed));
+    expect(prompt).toMatch(/issues/i);
+    expect(prompt).toMatch(/severity/i);
+    expect(prompt).toMatch(/JSON/);
+  });
+
+  it('includes every checklist item from the spec', () => {
+    const prompt = buildParseSpecCritiquePrompt(sampleSpec, sampleParsed);
+    for (const cue of [
+      'domain correctness',
+      'feature summary',
+      'inputs',
+      'outputs',
+      'constraints',
+      'no hallucination',
+      'granularity',
+    ]) {
+      expect(prompt.toLowerCase()).toContain(cue);
+    }
+  });
+});
+
+describe('buildParseSpecRevisePrompt', () => {
+  it('embeds the current parsed JSON and renders each issue as a bullet', () => {
+    const prompt = buildParseSpecRevisePrompt(sampleParsed, [sampleIssue]);
+    expect(prompt).toContain(JSON.stringify(sampleParsed));
+    expect(prompt).toContain(sampleIssue.field);
+    expect(prompt).toContain(sampleIssue.description);
+    expect(prompt).toContain(sampleIssue.suggestion);
+    expect(prompt).toMatch(/preserve/i);
+    expect(prompt).toMatch(/JSON/);
+  });
+
+  it('does NOT embed the original spec (revise must work from output + issues only)', () => {
+    const prompt = buildParseSpecRevisePrompt(sampleParsed, [sampleIssue]);
+    expect(prompt).not.toContain(sampleSpec);
   });
 });
