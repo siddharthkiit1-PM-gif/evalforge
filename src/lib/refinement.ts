@@ -6,7 +6,7 @@ export type RefinementInputs<T> = {
   revise: (output: T, issues: Issue[]) => Promise<T>;
   signal?: AbortSignal;
   // Max revise rounds. Defaults to 2 per the design spec.
-  maxPasses?: 1 | 2 | 3;
+  maxPasses?: 1 | 2;
 };
 
 const MAX_PASSES_DEFAULT = 2;
