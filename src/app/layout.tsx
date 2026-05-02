@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Mono, IBM_Plex_Sans, JetBrains_Mono } from "next/font/google";
+import Nav from "@/components/Nav";
+import Footer from "@/components/Footer";
 import "./globals.css";
 
 const spaceMono = Space_Mono({
@@ -34,7 +36,11 @@ export default function RootLayout({
       className={`${spaceMono.variable} ${ibmPlexSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-bg text-fg font-body">
-        {children}
+        <Nav />
+        <main className="flex-1 mx-auto w-full max-w-[1200px] px-6 py-12">
+          {children}
+        </main>
+        <Footer />
       </body>
     </html>
   );
