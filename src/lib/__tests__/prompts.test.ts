@@ -5,8 +5,10 @@ import {
   buildGenerateRubricPrompt,
   buildParseSpecCritiquePrompt,
   buildParseSpecRevisePrompt,
+  buildGenerateTestsCritiquePrompt,
+  buildGenerateTestsRevisePrompt,
 } from '@/lib/prompts';
-import type { ParsedSpec, Issue } from '@/lib/types';
+import type { ParsedSpec, Issue, TestCase } from '@/lib/types';
 
 const SAMPLE_PARSED: ParsedSpec = {
   feature: 'Cold email drafter',
@@ -140,5 +142,64 @@ describe('buildParseSpecRevisePrompt', () => {
   it('does NOT embed the original spec (revise must work from output + issues only)', () => {
     const prompt = buildParseSpecRevisePrompt(sampleParsed, [sampleIssue]);
     expect(prompt).not.toContain(sampleSpec);
+  });
+});
+
+const sampleTests: TestCase[] = Array.from({ length: 20 }, (_, i) => ({
+  id: `test-${String(i + 1).padStart(2, '0')}`,
+  category: i < 8 ? 'happy_path' : i < 15 ? 'edge_case' : 'adversarial',
+  input: `sample input ${i + 1}`,
+}));
+
+describe('buildGenerateTestsCritiquePrompt', () => {
+  it('embeds the parsed spec and the tests array', () => {
+    const prompt = buildGenerateTestsCritiquePrompt(sampleParsed, sampleTests);
+    expect(prompt).toContain(sampleParsed.feature);
+    expect(prompt).toContain(JSON.stringify(sampleTests));
+    expect(prompt).toMatch(/issues/i);
+  });
+
+  it('includes every checklist item from the spec', () => {
+    const prompt = buildGenerateTestsCritiquePrompt(sampleParsed, sampleTests);
+    for (const cue of [
+      'count',
+      'distribution',
+      'concrete',
+      'coverage',
+      'constraints',
+      'adversarial',
+      'realism',
+      'specificity',
+    ]) {
+      expect(prompt.toLowerCase()).toContain(cue);
+    }
+  });
+});
+
+describe('buildGenerateTestsRevisePrompt', () => {
+  it('embeds the current tests and renders each issue as a bullet', () => {
+    const issue: Issue = {
+      field: 'tests[3].category',
+      severity: 'major',
+      description: 'mislabeled',
+      suggestion: 'reclassify',
+    };
+    const prompt = buildGenerateTestsRevisePrompt(sampleTests, [issue]);
+    expect(prompt).toContain(JSON.stringify(sampleTests));
+    expect(prompt).toContain(issue.field);
+    expect(prompt).toContain(issue.description);
+    expect(prompt).toContain(issue.suggestion);
+    expect(prompt).toMatch(/preserve/i);
+  });
+
+  it('does NOT embed the parsed spec', () => {
+    const issue: Issue = {
+      field: 'tests[0].input',
+      severity: 'major',
+      description: 'too vague',
+      suggestion: 'be specific',
+    };
+    const prompt = buildGenerateTestsRevisePrompt(sampleTests, [issue]);
+    expect(prompt).not.toContain(sampleParsed.feature);
   });
 });

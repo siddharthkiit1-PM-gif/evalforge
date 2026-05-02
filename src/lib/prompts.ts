@@ -1,4 +1,4 @@
-import type { ParsedSpec, Issue } from '@/lib/types';
+import type { ParsedSpec, Issue, TestCase } from '@/lib/types';
 
 export function buildParseSpecPrompt(spec: string): string {
   return `You are an evaluation engineer. Read the AI feature spec below and return a single JSON object describing it.
@@ -165,4 +165,68 @@ Produce a corrected ParsedSpec that:
 4. Does not introduce new fields and does not omit any.
 
 Respond with ONLY the corrected JSON object (no prose, no markdown).`;
+}
+
+export function buildGenerateTestsCritiquePrompt(
+  parsed: ParsedSpec,
+  tests: TestCase[],
+): string {
+  return `You are an evaluation engineer reviewing a generated test suite.
+
+Feature: ${parsed.feature}
+Domain: ${parsed.domain}
+Inputs:
+${parsed.inputs.map((s) => `- ${s}`).join('\n')}
+Outputs:
+${parsed.outputs.map((s) => `- ${s}`).join('\n')}
+Constraints:
+${parsed.constraints.map((s) => `- ${s}`).join('\n')}
+
+Tests JSON:
+${JSON.stringify(tests)}
+
+Evaluate the tests against this checklist. For every violation, emit one issue:
+1. Count — exactly 20 tests with IDs test-01..test-20.
+2. Distribution — roughly 8 happy_path, 7 edge_case, 5 adversarial (±1 each).
+3. Concrete inputs — every input is a literal string the feature would receive, not a description, placeholder, or meta-language ("This test checks…").
+4. Coverage of inputs — every parsed-spec input is exercised by ≥1 test.
+5. Coverage of constraints — every parsed-spec constraint is probed by ≥1 test.
+6. Adversarial validity — adversarial-labeled tests actually attempt to break the agent (prompt injection, jailbreak, contradictory instructions, hostile input, ambiguous phrasing) — not merely informal phrasing or typos.
+7. Realism — inputs resemble real user phrasing; tone/length/register varies.
+8. Specificity — no input so vague the agent's behavior can't be evaluated.
+
+For each violation, emit an issue object:
+{
+  "field": "JSON path into the tests array, e.g. tests[3].category",
+  "severity": "major" | "minor",
+  "description": "what is wrong",
+  "suggestion": "how to fix"
+}
+
+Use "major" only for issues that would invalidate the test as a unit of evaluation. Style nits are "minor".
+
+Respond with ONLY this JSON (no prose, no markdown):
+{ "issues": [ ... ] }
+
+If everything is correct, respond with: { "issues": [] }`;
+}
+
+export function buildGenerateTestsRevisePrompt(
+  current: TestCase[],
+  issues: Issue[],
+): string {
+  return `You produced this test suite:
+${JSON.stringify(current)}
+
+A reviewer found these issues:
+${renderIssues(issues)}
+
+Produce a corrected test suite that:
+1. Fixes EVERY listed issue.
+2. Preserves all unflagged tests unchanged.
+3. Returns the SAME schema shape: an array of 20 objects, each with id, category, input, and optional notes.
+4. Keeps IDs zero-padded (test-01..test-20) and unique.
+5. Each input must remain a literal string the feature would receive — never a description.
+
+Respond with ONLY the corrected JSON array (no prose, no markdown).`;
 }
