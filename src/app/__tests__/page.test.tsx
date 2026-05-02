@@ -112,6 +112,23 @@ describe('Home page (SSE pipeline)', () => {
     );
   });
 
+  it('preserves recoverable=false from a server-emitted SSE error event', async () => {
+    // Regression: previously the reducer wrote `recoverable: false` for SSE
+    // `error` frames, then runStage threw and the catch in run() dispatched
+    // STAGE_ERR with `recoverable: true`, silently downgrading the severity.
+    mockFetchSequence([
+      mockSSEStream([{ type: 'error', message: 'fatal upstream' }]),
+    ]);
+    render(<Home />);
+    fireEvent.change(screen.getByPlaceholderText(/spec/i), {
+      target: { value: 'spec' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate/i }));
+    const errEl = await screen.findByTestId('pipeline-error');
+    expect(errEl).toHaveTextContent(/fatal upstream/i);
+    expect(errEl).toHaveAttribute('data-recoverable', 'false');
+  });
+
   it('updates the test table live when a revised event arrives', async () => {
     const v0 = sampleTests.map((t, i) => (i === 0 ? { ...t, input: 'OLD' } : t));
     const v1 = sampleTests.map((t, i) => (i === 0 ? { ...t, input: 'NEW' } : t));

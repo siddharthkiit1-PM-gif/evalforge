@@ -20,6 +20,14 @@ const STAGE_LABEL: Record<StageKey, string> = {
   rubric: 'rubric',
 };
 
+// Marker error class so the catch in `run()` can distinguish errors raised
+// from SSE `error` frames (already recorded in state by the reducer with the
+// correct `recoverable` flag) from network/parse errors that need a fresh
+// STAGE_ERR dispatch.
+class SSEEventError extends Error {
+  readonly fromSSEEvent = true;
+}
+
 function statusText<T>(stage: StageKey, state: StageState<T>): string | null {
   if (state.phase === 'idle') return null;
   if (state.phase === 'done') return null;
@@ -80,7 +88,7 @@ async function runStage<T>(
       if (event.type === 'error') errored = event.message;
     }
   }
-  if (errored) throw new Error(errored);
+  if (errored) throw new SSEEventError(errored);
   if (final !== null) return final;
   if (latest !== null) return latest;
   throw new Error('Stream closed without any output');
@@ -117,6 +125,10 @@ export default function Home() {
         dispatch,
       );
     } catch (err) {
+      // SSE-event-originated errors are already recorded in state by the
+      // reducer (with `recoverable: false`). Avoid clobbering that with a
+      // STAGE_ERR dispatch that would downgrade them to recoverable.
+      if (err instanceof SSEEventError) return;
       const message = err instanceof Error ? err.message : 'Unknown error.';
       dispatch({ type: 'STAGE_ERR', stage: currentStage, message, recoverable: true });
     }
@@ -192,7 +204,11 @@ export default function Home() {
       )}
 
       {state.error && (
-        <p className="font-mono text-xs text-failure">
+        <p
+          className="font-mono text-xs text-failure"
+          data-testid="pipeline-error"
+          data-recoverable={state.error.recoverable ? 'true' : 'false'}
+        >
           Error: {state.error.message}
         </p>
       )}
