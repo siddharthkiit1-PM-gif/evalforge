@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# EvalForge
 
-## Getting Started
+Paste an AI feature spec. Get a domain-aware eval suite — a parsed spec, 20 realistic test cases, and a scoring rubric — produced and refined by Gemini in three streamed stages.
 
-First, run the development server:
+## What it does
+
+EvalForge takes a free-form description of an AI feature (e.g. "summarize medical visits into ICD-10 codes") and runs a three-stage pipeline:
+
+1. **Parse spec** → extracts feature, inputs, outputs, constraints, and domain (`legal | sales | healthcare | general`).
+2. **Generate tests** → produces 20 test cases distributed across happy-path, edge-case, and adversarial categories.
+3. **Generate rubric** → defines 4–6 weighted scoring dimensions tailored to the domain.
+
+Each stage runs through a bounded **generate → critique → revise** refinement loop (max 2 passes), with progress streamed to the UI as Server-Sent Events.
+
+## Stack
+
+- Next.js 16.2.4 (App Router, Turbopack)
+- React 19, TypeScript 5
+- Tailwind CSS 4
+- Google Gemini via `@google/genai`
+- Vitest + React Testing Library
+
+## Getting started
+
+Requires Node 20+ and a Gemini API key.
 
 ```bash
+npm install
+cp .env.example .env.local   # then add GEMINI_API_KEY
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000, click an example chip, and hit **Generate Eval Suite**.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command            | What it does                          |
+| ------------------ | ------------------------------------- |
+| `npm run dev`      | Start dev server on port 3000         |
+| `npm run build`    | Production build                      |
+| `npm run start`    | Run production build                  |
+| `npm run lint`     | ESLint (Next.js config)               |
+| `npm run test`     | Vitest in watch mode                  |
+| `npm run test:run` | Vitest single run (CI mode)           |
 
-## Learn More
+## Architecture
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+├── app/
+│   ├── page.tsx                       # Client: drives 3 SSE stages via useReducer
+│   └── api/
+│       ├── parse-spec/route.ts        # SSE: spec → ParsedSpec
+│       ├── generate-tests/route.ts    # SSE: ParsedSpec → TestCase[]
+│       └── generate-rubric/route.ts   # SSE: ParsedSpec → Rubric
+├── lib/
+│   ├── refinement.ts                  # Bounded generate→critique→revise generator
+│   ├── prompts.ts                     # Prompt builders for each stage
+│   ├── gemini.ts                      # Gemini client wrapper
+│   ├── pageReducer.ts                 # Per-stage state machine
+│   └── types.ts                       # ParsedSpec, TestCase, Rubric, RefinementEvent
+└── components/                        # SpecForm, TestSuiteTable, RubricPanel, etc.
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Each API route is a `text/event-stream` producer that emits typed `RefinementEvent` frames (`generated → critiquing → critiqued → revising → revised → done`). The client consumes them, dispatches into a per-stage reducer, and renders results progressively.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Testing
 
-## Deploy on Vercel
+102 tests across 16 files cover prompt builders, the refinement loop, SSE route handlers, the page reducer, and end-to-end UI flows (with Gemini mocked).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run test:run
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Project status
+
+- **Plan A** — Core pipeline (parse, generate, render) ✅
+- **Plan B** — Domain-aware generation, example chips, parsed spec card ✅
+- **Sub-project 1** — Refinement loops with critique/revise ✅
+- **Plan C** — Eval runner (feeds tests through Gemini, scores against the rubric) — next
