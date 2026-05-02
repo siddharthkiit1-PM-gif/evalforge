@@ -43,6 +43,12 @@ Generate exactly 20 tests, distributed roughly:
 
 Each test must include a realistic, domain-appropriate \`input\` string. The input is what the feature will receive at runtime — not a description of the test.
 
+Voice & realism (humanizer):
+- Write each \`input\` as if a real user typed or pasted it, not as test scaffolding. No meta-language like "This test checks…", "Example input:", or placeholder tokens.
+- Vary tone, register, and length across the 20 cases: some terse, some verbose, some polite, some blunt, some with abbreviations or rough grammar where plausible.
+- Adversarial inputs may include realistic typos, ambiguous phrasing, contradictory requests, prompt-injection attempts, or off-topic noise — whatever a real user might actually send.
+- Do not all sound like the same author. Different users have different voices.
+
 Respond with ONLY a JSON array (no prose, no markdown), matching this schema:
 
 [

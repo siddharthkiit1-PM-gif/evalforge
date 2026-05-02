@@ -46,6 +46,12 @@ describe('buildGenerateTestsPrompt', () => {
     expect(p).toMatch(/20/);
   });
 
+  it('asks inputs to sound like real users (humanizer guidance)', () => {
+    const p = buildGenerateTestsPrompt(SAMPLE_PARSED);
+    expect(p).toMatch(/humanizer|real user|tone|voice/i);
+    expect(p).toMatch(/vary/i);
+  });
+
   it('asks for the three categories', () => {
     const p = buildGenerateTestsPrompt(SAMPLE_PARSED);
     expect(p).toContain('happy_path');
