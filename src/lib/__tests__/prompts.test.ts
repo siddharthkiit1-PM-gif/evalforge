@@ -7,8 +7,10 @@ import {
   buildParseSpecRevisePrompt,
   buildGenerateTestsCritiquePrompt,
   buildGenerateTestsRevisePrompt,
+  buildGenerateRubricCritiquePrompt,
+  buildGenerateRubricRevisePrompt,
 } from '@/lib/prompts';
-import type { ParsedSpec, Issue, TestCase } from '@/lib/types';
+import type { ParsedSpec, Issue, TestCase, Rubric } from '@/lib/types';
 
 const SAMPLE_PARSED: ParsedSpec = {
   feature: 'Cold email drafter',
@@ -201,5 +203,54 @@ describe('buildGenerateTestsRevisePrompt', () => {
     };
     const prompt = buildGenerateTestsRevisePrompt(sampleTests, [issue]);
     expect(prompt).not.toContain(sampleParsed.feature);
+  });
+});
+
+const sampleRubric: Rubric = {
+  dimensions: [
+    { id: 'a', label: 'A', description: 'desc', weight: 0.25 },
+    { id: 'b', label: 'B', description: 'desc', weight: 0.25 },
+    { id: 'c', label: 'C', description: 'desc', weight: 0.25 },
+    { id: 'd', label: 'D', description: 'desc', weight: 0.25 },
+  ],
+};
+
+describe('buildGenerateRubricCritiquePrompt', () => {
+  it('embeds the parsed spec and rubric JSON', () => {
+    const prompt = buildGenerateRubricCritiquePrompt(sampleParsed, sampleRubric);
+    expect(prompt).toContain(sampleParsed.feature);
+    expect(prompt).toContain(JSON.stringify(sampleRubric));
+  });
+
+  it('includes every checklist item from the spec', () => {
+    const prompt = buildGenerateRubricCritiquePrompt(sampleParsed, sampleRubric);
+    for (const cue of [
+      'dimension count',
+      'weights',
+      'kebab-case',
+      'independence',
+      'measurability',
+      'coverage',
+      'domain specificity',
+      'naming',
+    ]) {
+      expect(prompt.toLowerCase()).toContain(cue);
+    }
+  });
+});
+
+describe('buildGenerateRubricRevisePrompt', () => {
+  it('embeds the current rubric and renders each issue as a bullet', () => {
+    const issue: Issue = {
+      field: 'dimensions[0].weight',
+      severity: 'major',
+      description: 'weights do not sum to 1',
+      suggestion: 'rebalance',
+    };
+    const prompt = buildGenerateRubricRevisePrompt(sampleRubric, [issue]);
+    expect(prompt).toContain(JSON.stringify(sampleRubric));
+    expect(prompt).toContain(issue.field);
+    expect(prompt).toContain(issue.suggestion);
+    expect(prompt).toMatch(/preserve/i);
   });
 });

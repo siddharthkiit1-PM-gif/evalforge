@@ -1,4 +1,4 @@
-import type { ParsedSpec, Issue, TestCase } from '@/lib/types';
+import type { ParsedSpec, Issue, TestCase, Rubric } from '@/lib/types';
 
 export function buildParseSpecPrompt(spec: string): string {
   return `You are an evaluation engineer. Read the AI feature spec below and return a single JSON object describing it.
@@ -229,4 +229,67 @@ Produce a corrected test suite that:
 5. Each input must remain a literal string the feature would receive — never a description.
 
 Respond with ONLY the corrected JSON array (no prose, no markdown).`;
+}
+
+export function buildGenerateRubricCritiquePrompt(
+  parsed: ParsedSpec,
+  rubric: Rubric,
+): string {
+  return `You are an evaluation engineer reviewing a scoring rubric.
+
+Feature: ${parsed.feature}
+Domain: ${parsed.domain}
+Inputs:
+${parsed.inputs.map((s) => `- ${s}`).join('\n')}
+Outputs:
+${parsed.outputs.map((s) => `- ${s}`).join('\n')}
+Constraints:
+${parsed.constraints.map((s) => `- ${s}`).join('\n')}
+
+Rubric JSON:
+${JSON.stringify(rubric)}
+
+Evaluate the rubric against this checklist. For every violation, emit one issue:
+1. Dimension count — between 4 and 6 dimensions.
+2. Weights — every weight is in [0, 1] and the weights sum to 1.0 within ±0.01.
+3. ID format — every id is kebab-case (e.g. factual-accuracy).
+4. Independence — dimensions don't overlap; no two score the same thing.
+5. Measurability — each description provides scorable criteria, not opinion.
+6. Coverage — every parsed-spec constraint is reflected in at least one dimension.
+7. Domain specificity — no generic dimensions like "quality" or "helpfulness"; each reflects a real failure mode for THIS feature.
+8. Naming clarity — labels are self-explanatory.
+
+For each violation, emit an issue object:
+{
+  "field": "JSON path, e.g. dimensions[0].weight",
+  "severity": "major" | "minor",
+  "description": "what is wrong",
+  "suggestion": "how to fix"
+}
+
+Use "major" for anything that would invalidate scoring (count, weights, coverage). Style nits are "minor".
+
+Respond with ONLY this JSON (no prose, no markdown):
+{ "issues": [ ... ] }
+
+If everything is correct, respond with: { "issues": [] }`;
+}
+
+export function buildGenerateRubricRevisePrompt(
+  current: Rubric,
+  issues: Issue[],
+): string {
+  return `You produced this rubric:
+${JSON.stringify(current)}
+
+A reviewer found these issues:
+${renderIssues(issues)}
+
+Produce a corrected rubric that:
+1. Fixes EVERY listed issue.
+2. Preserves all unflagged dimensions unchanged.
+3. Returns the SAME schema: { "dimensions": [{ id, label, description, weight }, ...] }.
+4. Keeps 4-6 dimensions; ids stay kebab-case; weights are floats in [0, 1] summing to 1.0 within ±0.01.
+
+Respond with ONLY the corrected JSON object (no prose, no markdown).`;
 }
