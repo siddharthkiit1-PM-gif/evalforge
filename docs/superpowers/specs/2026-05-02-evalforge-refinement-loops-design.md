@@ -64,9 +64,9 @@ return new Response(stream, {
 
 Inside, the route consumes the refinement generator and writes one `data: <json>\n\n` frame per event. Closes the stream after `done` (or `error`).
 
-### `lib/gemini.ts` extension
+### `lib/gemini.ts` — already sufficient
 
-Adds `generateJSON<T>(prompt, schema)` — consolidates the existing pattern (call → `extractJSON` → schema validation). Used identically by generate/critique/revise. Retry-on-429 unchanged.
+`generateJSON<T>(prompt)` already exists (lines 49-61): wraps `withRetry` (429 backoff), calls Gemini, runs `extractJSON`. Used identically by generate/critique/revise. **No changes required.**
 
 ### `lib/prompts.ts` extension
 
@@ -231,32 +231,37 @@ The whole feature lives or dies on critique quality. The contract has to be **sp
 
 ### Per-stage critique checklists (inlined in each prompt)
 
-**Parse-spec critique:**
+**Parse-spec critique** (against actual `ParsedSpec` shape `{feature, inputs, outputs, constraints, domain}`):
 
-1. **Domain correctness** — `domain` matches the spec's actual subject matter.
-2. **Capability completeness** — every distinct ability mentioned in the source is in `capabilities`.
-3. **Faithfulness** — no capability is hallucinated that isn't supported by the source.
-4. **Edge case coverage** — `edgeCases` enumerates the spec's stated tricky inputs (not generic platitudes).
-5. **Summary fidelity** — summary doesn't introduce facts absent from the spec.
+1. **Domain correctness** — `domain` is one of `legal | sales | healthcare | general` and matches the spec's actual subject.
+2. **Feature summary fidelity** — `feature` is a faithful one-line summary; no facts absent from the spec.
+3. **Inputs completeness** — every distinct input the AI receives, per the spec, is in `inputs`.
+4. **Outputs completeness** — every distinct output the AI produces, per the spec, is in `outputs`.
+5. **Constraints completeness** — every requirement/rule the output must satisfy is in `constraints`.
+6. **No hallucination** — no item in `inputs`/`outputs`/`constraints` is unsupported by the spec.
+7. **Granularity** — items are 1-6 short, specific bullets per list; no duplicates.
 
-**Generate-tests critique:**
+**Generate-tests critique** (against actual `TestCase` shape `{id, category, input, notes?}` with categories `happy_path | edge_case | adversarial`):
 
-1. **Count** — exactly 20 tests.
-2. **Category distribution** — at least 1 test per category used; no category over 60% of total.
-3. **Testability** — every test has a measurable expected behavior, not "responds appropriately."
-4. **Capability coverage** — every `capability` in ParsedSpec is exercised by ≥1 test.
-5. **Edge case coverage** — every `edgeCase` is exercised by ≥1 test.
-6. **Adversarial validity** — adversarial-labeled tests actually attempt to break the agent (prompt injection, jailbreak, contradictory instructions, hostile input) — *not* merely informal phrasing or typos.
-7. **Realism** — inputs resemble what a user would actually send.
-8. **Specificity** — no test input is so vague the agent's behavior can't be evaluated.
+1. **Count** — exactly 20 tests with IDs `test-01`…`test-20`.
+2. **Category distribution** — roughly 8 `happy_path`, 7 `edge_case`, 5 `adversarial` (per existing generation prompt). Tolerance ±1.
+3. **Concrete inputs** — every `input` is a literal string the feature would receive, not a description, placeholder, or meta-language ("This test checks…").
+4. **Coverage of `inputs`** — every item in the parsed spec's `inputs` is exercised by ≥1 test.
+5. **Coverage of `constraints`** — every item in `constraints` is probed by ≥1 test (positive or violation).
+6. **Adversarial validity** — `adversarial` tests actually attempt to break the agent (prompt injection, jailbreak, contradictory instructions, hostile input, ambiguous phrasing) — *not* merely informal phrasing or typos.
+7. **Realism / voice variety** — inputs resemble real user phrasing; tone/length/register varies across the 20.
+8. **Specificity** — no input so vague the agent's behavior can't be evaluated.
 
-**Generate-rubric critique:**
+**Generate-rubric critique** (against actual `Rubric` shape `{dimensions: [{id, label, description, weight}]}`):
 
 1. **Dimension count** — between 4 and 6.
-2. **Independence** — dimensions don't overlap (no two scoring the same thing).
-3. **Measurability** — each dimension has clear scoring criteria, not opinion.
-4. **Capability coverage** — every `capability` is reflected in at least one dimension.
-5. **Naming clarity** — dimension names are self-explanatory.
+2. **Weights** — every `weight ∈ [0, 1]`; sum equals 1.0 within ±0.01.
+3. **ID format** — every `id` is kebab-case.
+4. **Independence** — dimensions don't overlap; no two score the same thing.
+5. **Measurability** — each `description` provides scorable criteria, not opinion.
+6. **Coverage of `constraints`** — every item in the parsed spec's `constraints` is reflected in ≥1 dimension.
+7. **Domain specificity** — no generic dimensions like "quality" or "helpfulness"; each reflects a real failure mode for this feature.
+8. **Naming clarity** — `label` is self-explanatory.
 
 ### Revise prompt
 
@@ -364,7 +369,7 @@ All Gemini calls mocked — zero network in CI.
 | Module | Tests | Approach |
 |---|---|---|
 | `lib/refinement.ts` | ~10 | Stub generate/critique/revise; assert event order, exit conditions, error propagation. |
-| `lib/gemini.ts` | +3 | Mock `@google/genai`; test new `generateJSON` helper. |
+| `lib/gemini.ts` | 0 | `generateJSON` already exists and tested. |
 | `lib/prompts.ts` | +12 | Snapshot + assertion tests for the 6 new builders. |
 | `app/api/<stage>/route.ts` ×3 | ~5 each = 15 | Mock `lib/refinement`; consume the response stream; assert SSE frame sequence. |
 | `lib/pageReducer.ts` | +12 | Pure reducer tests for `STAGE_EVENT` and `STAGE_ERR`. |
