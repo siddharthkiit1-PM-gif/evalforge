@@ -293,3 +293,42 @@ Produce a corrected rubric that:
 
 Respond with ONLY the corrected JSON object (no prose, no markdown).`;
 }
+
+export function buildRunEvalPrompt(
+  parsed: ParsedSpec,
+  rubric: Rubric,
+  test: TestCase,
+): string {
+  return `You are an evaluation engineer. The feature spec below describes an AI feature. Produce the feature output for the given input, then score that output on each rubric dimension.
+
+Feature: ${parsed.feature}
+Domain: ${parsed.domain}
+Inputs the feature expects:
+${parsed.inputs.map((s) => `- ${s}`).join('\n')}
+Outputs the feature produces:
+${parsed.outputs.map((s) => `- ${s}`).join('\n')}
+Constraints the output must satisfy:
+${parsed.constraints.map((s) => `- ${s}`).join('\n')}
+
+Rubric dimensions:
+${rubric.dimensions.map((d) => `- ${d.id}: ${d.label} — ${d.description}`).join('\n')}
+
+Test input:
+"""
+${test.input}
+"""
+
+Respond with ONLY this JSON (no prose, no markdown):
+{
+  "output": "the feature output for the test input",
+  "scores": [
+    { "dimensionId": "...", "score": 0.0, "reasoning": "1-line justification" }
+  ]
+}
+
+Rules:
+- Score each dimension on a 0.0-1.0 scale where 1.0 means fully satisfied.
+- Be honest. Penalize the output for failing constraints, even if the answer is otherwise good.
+- Reasoning is one short sentence. No hedging.
+- Output JSON only.`;
+}

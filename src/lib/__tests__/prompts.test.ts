@@ -9,6 +9,7 @@ import {
   buildGenerateTestsRevisePrompt,
   buildGenerateRubricCritiquePrompt,
   buildGenerateRubricRevisePrompt,
+  buildRunEvalPrompt,
 } from '@/lib/prompts';
 import type { ParsedSpec, Issue, TestCase, Rubric } from '@/lib/types';
 
@@ -252,5 +253,53 @@ describe('buildGenerateRubricRevisePrompt', () => {
     expect(prompt).toContain(issue.field);
     expect(prompt).toContain(issue.suggestion);
     expect(prompt).toMatch(/preserve/i);
+  });
+});
+
+describe('buildRunEvalPrompt', () => {
+  it('includes feature, all dimension ids, the test input, and JSON-only rule', () => {
+    const prompt = buildRunEvalPrompt(
+      sampleParsed,
+      {
+        dimensions: [
+          { id: 'fidelity', label: 'F', description: 'd', weight: 0.5 },
+          { id: 'brevity', label: 'B', description: 'd', weight: 0.5 },
+        ],
+      },
+      { id: 'test-01', category: 'happy_path', input: 'literal user input here' },
+    );
+    expect(prompt).toContain(sampleParsed.feature);
+    expect(prompt).toContain('fidelity');
+    expect(prompt).toContain('brevity');
+    expect(prompt).toContain('literal user input here');
+    expect(prompt).toMatch(/json only/i);
+  });
+
+  it('embeds all rubric dimension labels and descriptions', () => {
+    const rubric = {
+      dimensions: [
+        { id: 'a', label: 'Alpha', description: 'is alpha', weight: 0.5 },
+        { id: 'b', label: 'Beta', description: 'is beta', weight: 0.5 },
+      ],
+    };
+    const prompt = buildRunEvalPrompt(
+      sampleParsed,
+      rubric,
+      { id: 'test-01', category: 'happy_path', input: 'x' },
+    );
+    expect(prompt).toContain('Alpha');
+    expect(prompt).toContain('Beta');
+    expect(prompt).toContain('is alpha');
+    expect(prompt).toContain('is beta');
+  });
+
+  it('asks for output and scores in one JSON object', () => {
+    const prompt = buildRunEvalPrompt(
+      sampleParsed,
+      { dimensions: [{ id: 'a', label: 'A', description: '', weight: 1 }] },
+      { id: 'test-01', category: 'happy_path', input: 'x' },
+    );
+    expect(prompt).toContain('"output"');
+    expect(prompt).toContain('"scores"');
   });
 });
