@@ -12,6 +12,7 @@ import {
   buildRunEvalPrompt,
 } from '@/lib/prompts';
 import type { ParsedSpec, Issue, TestCase, Rubric } from '@/lib/types';
+import type { Exemplar } from '@/lib/exemplars';
 
 const SAMPLE_PARSED: ParsedSpec = {
   feature: 'Cold email drafter',
@@ -253,6 +254,110 @@ describe('buildGenerateRubricRevisePrompt', () => {
     expect(prompt).toContain(issue.field);
     expect(prompt).toContain(issue.suggestion);
     expect(prompt).toMatch(/preserve/i);
+  });
+});
+
+const SAMPLE_EXEMPLAR: Exemplar = {
+  spec: 'Sample spec for testing',
+  output: '[{"id":"test-01","category":"happy_path","input":"hi"}]',
+  rationale: 'Sample rationale',
+};
+
+describe('buildGenerateTestsPrompt with exemplars', () => {
+  it('omits the Examples section when no exemplars are passed', () => {
+    const prompt = buildGenerateTestsPrompt(SAMPLE_PARSED);
+    expect(prompt).not.toContain('## Examples');
+  });
+
+  it('omits the Examples section when an empty exemplars array is passed', () => {
+    const prompt = buildGenerateTestsPrompt(SAMPLE_PARSED, []);
+    expect(prompt).not.toContain('## Examples');
+  });
+
+  it('includes each exemplar spec, rationale, and output when exemplars are passed', () => {
+    const prompt = buildGenerateTestsPrompt(SAMPLE_PARSED, [SAMPLE_EXEMPLAR]);
+    expect(prompt).toContain('## Examples');
+    expect(prompt).toContain(SAMPLE_EXEMPLAR.spec);
+    expect(prompt).toContain(SAMPLE_EXEMPLAR.rationale);
+    expect(prompt).toContain(SAMPLE_EXEMPLAR.output);
+  });
+});
+
+describe('buildGenerateTestsCritiquePrompt with exemplars', () => {
+  const tests: TestCase[] = [{ id: 'test-01', category: 'happy_path', input: 'a' }];
+
+  it('omits the Examples section when no exemplars are passed', () => {
+    expect(buildGenerateTestsCritiquePrompt(SAMPLE_PARSED, tests)).not.toContain('## Examples');
+  });
+
+  it('includes the Examples section when exemplars are passed', () => {
+    const prompt = buildGenerateTestsCritiquePrompt(SAMPLE_PARSED, tests, [SAMPLE_EXEMPLAR]);
+    expect(prompt).toContain('## Examples');
+    expect(prompt).toContain(SAMPLE_EXEMPLAR.spec);
+  });
+});
+
+describe('buildGenerateTestsRevisePrompt with exemplars', () => {
+  const tests: TestCase[] = [{ id: 'test-01', category: 'happy_path', input: 'a' }];
+
+  it('omits the Examples section when no exemplars are passed', () => {
+    expect(buildGenerateTestsRevisePrompt(tests, [])).not.toContain('## Examples');
+  });
+
+  it('includes the Examples section when exemplars are passed', () => {
+    const prompt = buildGenerateTestsRevisePrompt(tests, [], [SAMPLE_EXEMPLAR]);
+    expect(prompt).toContain('## Examples');
+    expect(prompt).toContain(SAMPLE_EXEMPLAR.spec);
+  });
+});
+
+const SAMPLE_RUBRIC_EXEMPLAR: Exemplar = {
+  spec: 'Rubric exemplar spec',
+  output: '{"dimensions":[{"id":"a","label":"A","description":"d","weight":1}]}',
+  rationale: 'Rubric rationale',
+};
+
+const RUBRIC: Rubric = {
+  dimensions: [
+    { id: 'a', label: 'A', description: 'd', weight: 1 },
+  ],
+};
+
+describe('buildGenerateRubricPrompt with exemplars', () => {
+  it('omits the Examples section when no exemplars are passed', () => {
+    expect(buildGenerateRubricPrompt(SAMPLE_PARSED)).not.toContain('## Examples');
+  });
+
+  it('includes the Examples section when exemplars are passed', () => {
+    const prompt = buildGenerateRubricPrompt(SAMPLE_PARSED, [SAMPLE_RUBRIC_EXEMPLAR]);
+    expect(prompt).toContain('## Examples');
+    expect(prompt).toContain(SAMPLE_RUBRIC_EXEMPLAR.spec);
+    expect(prompt).toContain(SAMPLE_RUBRIC_EXEMPLAR.rationale);
+    expect(prompt).toContain(SAMPLE_RUBRIC_EXEMPLAR.output);
+  });
+});
+
+describe('buildGenerateRubricCritiquePrompt with exemplars', () => {
+  it('omits the Examples section when no exemplars are passed', () => {
+    expect(buildGenerateRubricCritiquePrompt(SAMPLE_PARSED, RUBRIC)).not.toContain('## Examples');
+  });
+
+  it('includes the Examples section when exemplars are passed', () => {
+    const prompt = buildGenerateRubricCritiquePrompt(SAMPLE_PARSED, RUBRIC, [SAMPLE_RUBRIC_EXEMPLAR]);
+    expect(prompt).toContain('## Examples');
+    expect(prompt).toContain(SAMPLE_RUBRIC_EXEMPLAR.spec);
+  });
+});
+
+describe('buildGenerateRubricRevisePrompt with exemplars', () => {
+  it('omits the Examples section when no exemplars are passed', () => {
+    expect(buildGenerateRubricRevisePrompt(RUBRIC, [])).not.toContain('## Examples');
+  });
+
+  it('includes the Examples section when exemplars are passed', () => {
+    const prompt = buildGenerateRubricRevisePrompt(RUBRIC, [], [SAMPLE_RUBRIC_EXEMPLAR]);
+    expect(prompt).toContain('## Examples');
+    expect(prompt).toContain(SAMPLE_RUBRIC_EXEMPLAR.spec);
   });
 });
 

@@ -5,6 +5,7 @@ import {
   buildGenerateRubricRevisePrompt,
 } from '@/lib/prompts';
 import { runRefinement } from '@/lib/refinement';
+import { selectExemplars } from '@/lib/exemplars';
 import type {
   Issue,
   ParsedSpec,
@@ -52,19 +53,21 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
+  const exemplars = selectExemplars(parsed.domain, 'rubric');
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const encoder = new TextEncoder();
       const generator = runRefinement<Rubric>({
-        generate: () => generateJSON<Rubric>(buildGenerateRubricPrompt(parsed)),
+        generate: () => generateJSON<Rubric>(buildGenerateRubricPrompt(parsed, exemplars)),
         critique: async (current) => {
           const result = await generateJSON<{ issues: Issue[] }>(
-            buildGenerateRubricCritiquePrompt(parsed, current),
+            buildGenerateRubricCritiquePrompt(parsed, current, exemplars),
           );
           return Array.isArray(result?.issues) ? result.issues : [];
         },
         revise: (current, issues) =>
-          generateJSON<Rubric>(buildGenerateRubricRevisePrompt(current, issues)),
+          generateJSON<Rubric>(buildGenerateRubricRevisePrompt(current, issues, exemplars)),
         signal: req.signal,
       });
       try {
