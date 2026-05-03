@@ -21,11 +21,7 @@ export const EXEMPLARS: ExemplarTable = {
   general: { tests: [], rubric: [] },
 };
 
-const KNOWN_DOMAINS = new Set<Domain>(['legal', 'sales', 'healthcare', 'general']);
-
 export function selectExemplars(domain: Domain | string, stage: ExemplarStage): Exemplar[] {
-  const d = typeof domain === 'string' && KNOWN_DOMAINS.has(domain as Domain)
-    ? (domain as Domain)
-    : 'general';
+  const d = Object.hasOwn(EXEMPLARS, domain) ? (domain as Domain) : 'general';
   return EXEMPLARS[d][stage];
 }

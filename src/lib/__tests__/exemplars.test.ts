@@ -10,14 +10,17 @@ describe('selectExemplars', () => {
 
   it('returns the sales exemplars for the sales domain', () => {
     expect(selectExemplars('sales', 'tests')).toBe(EXEMPLARS.sales.tests);
+    expect(selectExemplars('sales', 'rubric')).toBe(EXEMPLARS.sales.rubric);
   });
 
   it('returns the healthcare exemplars for the healthcare domain', () => {
+    expect(selectExemplars('healthcare', 'tests')).toBe(EXEMPLARS.healthcare.tests);
     expect(selectExemplars('healthcare', 'rubric')).toBe(EXEMPLARS.healthcare.rubric);
   });
 
   it('returns the general exemplars for the general domain', () => {
     expect(selectExemplars('general', 'tests')).toBe(EXEMPLARS.general.tests);
+    expect(selectExemplars('general', 'rubric')).toBe(EXEMPLARS.general.rubric);
   });
 
   it('returns the general exemplars for an unknown domain string', () => {
