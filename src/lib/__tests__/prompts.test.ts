@@ -12,6 +12,7 @@ import {
   buildRunEvalPrompt,
 } from '@/lib/prompts';
 import type { ParsedSpec, Issue, TestCase, Rubric } from '@/lib/types';
+import type { Exemplar } from '@/lib/exemplars';
 
 const SAMPLE_PARSED: ParsedSpec = {
   feature: 'Cold email drafter',
@@ -256,16 +257,6 @@ describe('buildGenerateRubricRevisePrompt', () => {
   });
 });
 
-import type { Exemplar } from '@/lib/exemplars';
-
-const PARSED: ParsedSpec = {
-  feature: 'Test feature',
-  inputs: ['x'],
-  outputs: ['y'],
-  constraints: ['z'],
-  domain: 'general',
-};
-
 const SAMPLE_EXEMPLAR: Exemplar = {
   spec: 'Sample spec for testing',
   output: '[{"id":"test-01","category":"happy_path","input":"hi"}]',
@@ -274,17 +265,17 @@ const SAMPLE_EXEMPLAR: Exemplar = {
 
 describe('buildGenerateTestsPrompt with exemplars', () => {
   it('omits the Examples section when no exemplars are passed', () => {
-    const prompt = buildGenerateTestsPrompt(PARSED);
+    const prompt = buildGenerateTestsPrompt(SAMPLE_PARSED);
     expect(prompt).not.toContain('## Examples');
   });
 
   it('omits the Examples section when an empty exemplars array is passed', () => {
-    const prompt = buildGenerateTestsPrompt(PARSED, []);
+    const prompt = buildGenerateTestsPrompt(SAMPLE_PARSED, []);
     expect(prompt).not.toContain('## Examples');
   });
 
   it('includes each exemplar spec, rationale, and output when exemplars are passed', () => {
-    const prompt = buildGenerateTestsPrompt(PARSED, [SAMPLE_EXEMPLAR]);
+    const prompt = buildGenerateTestsPrompt(SAMPLE_PARSED, [SAMPLE_EXEMPLAR]);
     expect(prompt).toContain('## Examples');
     expect(prompt).toContain(SAMPLE_EXEMPLAR.spec);
     expect(prompt).toContain(SAMPLE_EXEMPLAR.rationale);
@@ -296,11 +287,11 @@ describe('buildGenerateTestsCritiquePrompt with exemplars', () => {
   const tests: TestCase[] = [{ id: 'test-01', category: 'happy_path', input: 'a' }];
 
   it('omits the Examples section when no exemplars are passed', () => {
-    expect(buildGenerateTestsCritiquePrompt(PARSED, tests)).not.toContain('## Examples');
+    expect(buildGenerateTestsCritiquePrompt(SAMPLE_PARSED, tests)).not.toContain('## Examples');
   });
 
   it('includes the Examples section when exemplars are passed', () => {
-    const prompt = buildGenerateTestsCritiquePrompt(PARSED, tests, [SAMPLE_EXEMPLAR]);
+    const prompt = buildGenerateTestsCritiquePrompt(SAMPLE_PARSED, tests, [SAMPLE_EXEMPLAR]);
     expect(prompt).toContain('## Examples');
     expect(prompt).toContain(SAMPLE_EXEMPLAR.spec);
   });
