@@ -269,12 +269,10 @@ export default function Home() {
       {ready && parsed && tests && rubric && runState.phase === 'generating' && (
         <div className="flex flex-col gap-4">
           <EvalRunButton onRun={runEval} running={true} />
-          {runState.current?.kind === 'progress' && (
-            <EvalProgress
-              completed={runState.current.completed}
-              total={runState.current.total}
-            />
-          )}
+          <EvalProgress
+            completed={runState.current?.kind === 'progress' ? runState.current.completed : 0}
+            total={runState.current?.kind === 'progress' ? runState.current.total : tests.length}
+          />
         </div>
       )}
 

@@ -99,7 +99,7 @@ export async function POST(req: Request): Promise<Response> {
 
         const partial = await runBatched<TestCase, EvalResult>(tests, judgeOne, {
           concurrency: 2,
-          gapMs: 15000,
+          gapMs: 4000,
           signal: req.signal,
           onProgress: (completed, p) => { lastSnapshot = { completed, partialResults: p }; },
         });
