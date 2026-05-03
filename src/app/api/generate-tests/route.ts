@@ -1,4 +1,5 @@
 import { generateJSON } from '@/lib/gemini';
+import { selectExemplars } from '@/lib/exemplars';
 import {
   buildGenerateTestsPrompt,
   buildGenerateTestsCritiquePrompt,
@@ -52,13 +53,15 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
+  const exemplars = selectExemplars(parsed.domain, 'tests');
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const encoder = new TextEncoder();
       const generator = runRefinement<TestCase[]>({
         generate: async () => {
           const result = await generateJSON<TestCase[] | { tests: TestCase[] }>(
-            buildGenerateTestsPrompt(parsed),
+            buildGenerateTestsPrompt(parsed, exemplars),
           );
           // The existing prompt instructs the model to return an array.
           // Tolerate { tests: [...] } for backward compatibility.
@@ -66,13 +69,13 @@ export async function POST(req: Request): Promise<Response> {
         },
         critique: async (current) => {
           const result = await generateJSON<{ issues: Issue[] }>(
-            buildGenerateTestsCritiquePrompt(parsed, current),
+            buildGenerateTestsCritiquePrompt(parsed, current, exemplars),
           );
           return Array.isArray(result?.issues) ? result.issues : [];
         },
         revise: async (current, issues) => {
           const result = await generateJSON<TestCase[] | { tests: TestCase[] }>(
-            buildGenerateTestsRevisePrompt(current, issues),
+            buildGenerateTestsRevisePrompt(current, issues, exemplars),
           );
           return Array.isArray(result) ? result : result.tests;
         },
