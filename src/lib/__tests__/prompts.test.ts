@@ -256,6 +256,70 @@ describe('buildGenerateRubricRevisePrompt', () => {
   });
 });
 
+import type { Exemplar } from '@/lib/exemplars';
+
+const PARSED: ParsedSpec = {
+  feature: 'Test feature',
+  inputs: ['x'],
+  outputs: ['y'],
+  constraints: ['z'],
+  domain: 'general',
+};
+
+const SAMPLE_EXEMPLAR: Exemplar = {
+  spec: 'Sample spec for testing',
+  output: '[{"id":"test-01","category":"happy_path","input":"hi"}]',
+  rationale: 'Sample rationale',
+};
+
+describe('buildGenerateTestsPrompt with exemplars', () => {
+  it('omits the Examples section when no exemplars are passed', () => {
+    const prompt = buildGenerateTestsPrompt(PARSED);
+    expect(prompt).not.toContain('## Examples');
+  });
+
+  it('omits the Examples section when an empty exemplars array is passed', () => {
+    const prompt = buildGenerateTestsPrompt(PARSED, []);
+    expect(prompt).not.toContain('## Examples');
+  });
+
+  it('includes each exemplar spec, rationale, and output when exemplars are passed', () => {
+    const prompt = buildGenerateTestsPrompt(PARSED, [SAMPLE_EXEMPLAR]);
+    expect(prompt).toContain('## Examples');
+    expect(prompt).toContain(SAMPLE_EXEMPLAR.spec);
+    expect(prompt).toContain(SAMPLE_EXEMPLAR.rationale);
+    expect(prompt).toContain(SAMPLE_EXEMPLAR.output);
+  });
+});
+
+describe('buildGenerateTestsCritiquePrompt with exemplars', () => {
+  const tests: TestCase[] = [{ id: 'test-01', category: 'happy_path', input: 'a' }];
+
+  it('omits the Examples section when no exemplars are passed', () => {
+    expect(buildGenerateTestsCritiquePrompt(PARSED, tests)).not.toContain('## Examples');
+  });
+
+  it('includes the Examples section when exemplars are passed', () => {
+    const prompt = buildGenerateTestsCritiquePrompt(PARSED, tests, [SAMPLE_EXEMPLAR]);
+    expect(prompt).toContain('## Examples');
+    expect(prompt).toContain(SAMPLE_EXEMPLAR.spec);
+  });
+});
+
+describe('buildGenerateTestsRevisePrompt with exemplars', () => {
+  const tests: TestCase[] = [{ id: 'test-01', category: 'happy_path', input: 'a' }];
+
+  it('omits the Examples section when no exemplars are passed', () => {
+    expect(buildGenerateTestsRevisePrompt(tests, [])).not.toContain('## Examples');
+  });
+
+  it('includes the Examples section when exemplars are passed', () => {
+    const prompt = buildGenerateTestsRevisePrompt(tests, [], [SAMPLE_EXEMPLAR]);
+    expect(prompt).toContain('## Examples');
+    expect(prompt).toContain(SAMPLE_EXEMPLAR.spec);
+  });
+});
+
 describe('buildRunEvalPrompt', () => {
   it('includes feature, all dimension ids, the test input, and JSON-only rule', () => {
     const prompt = buildRunEvalPrompt(

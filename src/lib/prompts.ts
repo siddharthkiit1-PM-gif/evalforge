@@ -1,4 +1,5 @@
 import type { ParsedSpec, Issue, TestCase, Rubric } from '@/lib/types';
+import type { Exemplar } from '@/lib/exemplars';
 
 export function buildParseSpecPrompt(spec: string): string {
   return `You are an evaluation engineer. Read the AI feature spec below and return a single JSON object describing it.
@@ -24,7 +25,7 @@ Rules:
 - Output JSON only.`;
 }
 
-export function buildGenerateTestsPrompt(parsed: ParsedSpec): string {
+export function buildGenerateTestsPrompt(parsed: ParsedSpec, exemplars?: Exemplar[]): string {
   return `You are an evaluation engineer. Generate a suite of 20 test cases for the AI feature below.
 
 Feature: ${parsed.feature}
@@ -35,7 +36,7 @@ Outputs:
 ${parsed.outputs.map((s) => `- ${s}`).join('\n')}
 Constraints:
 ${parsed.constraints.map((s) => `- ${s}`).join('\n')}
-
+${renderExemplars(exemplars, parsed.domain)}
 Generate exactly 20 tests, distributed roughly:
 - 8 happy_path tests (typical valid inputs that should pass)
 - 7 edge_case tests (unusual but legal inputs: empty fields, very long inputs, ambiguity, multiple correct answers)
@@ -109,6 +110,20 @@ function renderIssues(issues: Issue[]): string {
     .join('\n');
 }
 
+function renderExemplars(exemplars: Exemplar[] | undefined, domain?: string): string {
+  if (!exemplars || exemplars.length === 0) return '';
+  const blocks = exemplars
+    .map(
+      (ex, i) =>
+        `### Example ${i + 1}\nSpec: ${ex.spec}\nWhy this is good: ${ex.rationale}\nOutput:\n${ex.output}`,
+    )
+    .join('\n\n');
+  const intro = domain
+    ? `The following are well-formed examples for similar specs in the ${domain} domain. Match this level of detail and structure.`
+    : `The following are well-formed examples. Match this level of detail and structure.`;
+  return `\n## Examples\n\n${intro}\n\n${blocks}\n\n`;
+}
+
 export function buildParseSpecCritiquePrompt(
   spec: string,
   parsed: ParsedSpec,
@@ -170,6 +185,7 @@ Respond with ONLY the corrected JSON object (no prose, no markdown).`;
 export function buildGenerateTestsCritiquePrompt(
   parsed: ParsedSpec,
   tests: TestCase[],
+  exemplars?: Exemplar[],
 ): string {
   return `You are an evaluation engineer reviewing a generated test suite.
 
@@ -181,7 +197,7 @@ Outputs:
 ${parsed.outputs.map((s) => `- ${s}`).join('\n')}
 Constraints:
 ${parsed.constraints.map((s) => `- ${s}`).join('\n')}
-
+${renderExemplars(exemplars, parsed.domain)}
 Tests JSON:
 ${JSON.stringify(tests)}
 
@@ -214,13 +230,14 @@ If everything is correct, respond with: { "issues": [] }`;
 export function buildGenerateTestsRevisePrompt(
   current: TestCase[],
   issues: Issue[],
+  exemplars?: Exemplar[],
 ): string {
   return `You produced this test suite:
 ${JSON.stringify(current)}
 
 A reviewer found these issues:
 ${renderIssues(issues)}
-
+${renderExemplars(exemplars)}
 Produce a corrected test suite that:
 1. Fixes EVERY listed issue.
 2. Preserves all unflagged tests unchanged.
