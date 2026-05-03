@@ -18,6 +18,7 @@ const STAGE_LABEL: Record<StageKey, string> = {
   parse: 'parsed spec',
   tests: 'tests',
   rubric: 'rubric',
+  run: 'run',
 };
 
 // Marker error class so the catch in `run()` can distinguish errors raised
