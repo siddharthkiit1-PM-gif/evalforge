@@ -1,7 +1,7 @@
 import { generateJSON } from '@/lib/gemini';
 import { runBatched } from '@/lib/runBatched';
 import { buildRunEvalPrompt } from '@/lib/prompts';
-import { summarize } from '@/lib/scoring';
+import { summarize, weightedOverall } from '@/lib/scoring';
 import type { EvalResult, ParsedSpec, Rubric, TestCase, RunEvent } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -88,10 +88,7 @@ export async function POST(req: Request): Promise<Response> {
         const judgeOne = async (test: TestCase): Promise<EvalResult> => {
           const raw = await generateJSON<RawJudge>(buildRunEvalPrompt(parsed, rubric, test));
           const scores = raw.scores ?? [];
-          const passedScore = scores.reduce((acc, s) => {
-            const dim = rubric.dimensions.find((d) => d.id === s.dimensionId);
-            return acc + (dim ? s.score * dim.weight : 0);
-          }, 0);
+          const passedScore = weightedOverall(scores, rubric);
           return {
             testId: test.id,
             output: raw.output ?? '',
