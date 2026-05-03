@@ -68,7 +68,7 @@ Rules:
 - Output JSON only.`;
 }
 
-export function buildGenerateRubricPrompt(parsed: ParsedSpec): string {
+export function buildGenerateRubricPrompt(parsed: ParsedSpec, exemplars?: Exemplar[]): string {
   return `You are an evaluation engineer. Define a scoring rubric for the AI feature below.
 
 Feature: ${parsed.feature}
@@ -79,7 +79,7 @@ Outputs:
 ${parsed.outputs.map((s) => `- ${s}`).join('\n')}
 Constraints:
 ${parsed.constraints.map((s) => `- ${s}`).join('\n')}
-
+${renderExemplars(exemplars, parsed.domain)}
 Pick 4-6 scoring dimensions tailored to this domain and feature. Avoid generic dimensions like "quality" or "helpfulness" — every dimension should reflect a real failure mode for THIS feature.
 
 Respond with ONLY a JSON object (no prose, no markdown), matching this schema:
@@ -251,6 +251,7 @@ Respond with ONLY the corrected JSON array (no prose, no markdown).`;
 export function buildGenerateRubricCritiquePrompt(
   parsed: ParsedSpec,
   rubric: Rubric,
+  exemplars?: Exemplar[],
 ): string {
   return `You are an evaluation engineer reviewing a scoring rubric.
 
@@ -262,7 +263,7 @@ Outputs:
 ${parsed.outputs.map((s) => `- ${s}`).join('\n')}
 Constraints:
 ${parsed.constraints.map((s) => `- ${s}`).join('\n')}
-
+${renderExemplars(exemplars, parsed.domain)}
 Rubric JSON:
 ${JSON.stringify(rubric)}
 
@@ -295,13 +296,14 @@ If everything is correct, respond with: { "issues": [] }`;
 export function buildGenerateRubricRevisePrompt(
   current: Rubric,
   issues: Issue[],
+  exemplars?: Exemplar[],
 ): string {
   return `You produced this rubric:
 ${JSON.stringify(current)}
 
 A reviewer found these issues:
 ${renderIssues(issues)}
-
+${renderExemplars(exemplars)}
 Produce a corrected rubric that:
 1. Fixes EVERY listed issue.
 2. Preserves all unflagged dimensions unchanged.
