@@ -33,7 +33,7 @@ function isTests(x: unknown): x is TestCase[] {
     && x.every((t) => t && typeof t === 'object' && 'id' in t && 'input' in t);
 }
 
-type RawJudge = { output?: string; scores?: { dimensionId: string; score: number; reasoning: string }[] };
+type RawJudge = { output?: unknown; scores?: { dimensionId: string; score: number; reasoning: string }[] };
 
 export async function POST(req: Request): Promise<Response> {
   let body: { parsed?: unknown; rubric?: unknown; tests?: unknown };
@@ -90,9 +90,15 @@ export async function POST(req: Request): Promise<Response> {
             const raw = await generateJSON<RawJudge>(buildRunEvalPrompt(parsed, rubric, test));
             const scores = raw.scores ?? [];
             const passedScore = weightedOverall(scores, rubric);
+            const output =
+              typeof raw.output === 'string'
+                ? raw.output
+                : raw.output == null
+                  ? ''
+                  : JSON.stringify(raw.output);
             return {
               testId: test.id,
-              output: raw.output ?? '',
+              output,
               scores,
               passed: passedScore >= PASS_THRESHOLD_DEFAULT,
             };

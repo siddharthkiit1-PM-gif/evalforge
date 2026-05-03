@@ -6,9 +6,10 @@ import { weightedOverall } from '@/lib/scoring';
 
 const MAX_OUTPUT_LEN = 80;
 
-function truncate(text: string, max = MAX_OUTPUT_LEN) {
-  if (text.length <= max) return text;
-  return text.slice(0, max - 1) + '…';
+function truncate(text: unknown, max = MAX_OUTPUT_LEN) {
+  const s = typeof text === 'string' ? text : JSON.stringify(text) ?? '';
+  if (s.length <= max) return s;
+  return s.slice(0, max - 1) + '…';
 }
 
 export default function ResultsTable({
