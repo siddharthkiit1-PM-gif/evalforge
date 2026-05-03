@@ -1,72 +1,104 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { ParsedSpec, Rubric } from '@/lib/types';
-
-vi.mock('@/lib/gemini', () => ({
-  generateJSON: vi.fn(),
-}));
-
 import { POST } from '@/app/api/generate-rubric/route';
+import { readSSEStream } from '@/test/sse-stream';
+import type { ParsedSpec, Rubric, RefinementEvent } from '@/lib/types';
+
+vi.mock('@/lib/gemini', () => ({ generateJSON: vi.fn() }));
+
 import { generateJSON } from '@/lib/gemini';
 
-const mockedGenerateJSON = vi.mocked(generateJSON);
-
-beforeEach(() => {
-  mockedGenerateJSON.mockReset();
-});
-
-const PARSED: ParsedSpec = {
-  feature: 'Cold email drafter',
-  inputs: ['profile'],
-  outputs: ['email'],
-  constraints: ['under 150 words'],
-  domain: 'sales',
+const sampleParsed: ParsedSpec = {
+  feature: 'Extracts obligations.',
+  inputs: ['contract pdf'],
+  outputs: ['table'],
+  constraints: ['due date'],
+  domain: 'legal',
 };
 
-const RUBRIC: Rubric = {
+const sampleRubric: Rubric = {
   dimensions: [
-    { id: 'personalization', label: 'Personalization', description: 'Refers to a specific profile detail.', weight: 0.5 },
-    { id: 'concision', label: 'Concision', description: 'Stays under 150 words.', weight: 0.5 },
+    { id: 'a', label: 'A', description: 'd', weight: 0.25 },
+    { id: 'b', label: 'B', description: 'd', weight: 0.25 },
+    { id: 'c', label: 'C', description: 'd', weight: 0.25 },
+    { id: 'd', label: 'D', description: 'd', weight: 0.25 },
   ],
 };
 
-function makeRequest(body: unknown): Request {
-  return new Request('http://localhost/api/generate-rubric', {
+const cleanCritique = { issues: [] };
+
+function jsonReq(body: unknown): Request {
+  return new Request('http://test/api/generate-rubric', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
 }
 
-describe('POST /api/generate-rubric', () => {
-  it('returns the rubric on success', async () => {
-    mockedGenerateJSON.mockResolvedValueOnce(RUBRIC);
-    const res = await POST(makeRequest({ parsed: PARSED }));
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(RUBRIC);
-  });
+beforeEach(() => {
+  vi.mocked(generateJSON).mockReset();
+});
 
-  it('returns 400 when parsed is missing', async () => {
-    const res = await POST(makeRequest({}));
+describe('POST /api/generate-rubric (SSE)', () => {
+  it('rejects non-JSON body with 400', async () => {
+    const req = new Request('http://test/api/generate-rubric', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{not json',
+    });
+    const res = await POST(req);
     expect(res.status).toBe(400);
   });
 
-  it('returns 500 when Gemini returns no dimensions', async () => {
-    mockedGenerateJSON.mockResolvedValueOnce({ dimensions: [] });
-    const res = await POST(makeRequest({ parsed: PARSED }));
-    expect(res.status).toBe(500);
+  it('rejects body without parsed with 400', async () => {
+    const res = await POST(jsonReq({}));
+    expect(res.status).toBe(400);
   });
 
-  it('returns 500 when Gemini throws', async () => {
-    mockedGenerateJSON.mockRejectedValueOnce(new Error('boom'));
-    const res = await POST(makeRequest({ parsed: PARSED }));
-    expect(res.status).toBe(500);
+  it('streams a clean run when first critique is empty', async () => {
+    vi.mocked(generateJSON)
+      .mockResolvedValueOnce(sampleRubric)
+      .mockResolvedValueOnce(cleanCritique);
+    const res = await POST(jsonReq({ parsed: sampleParsed }));
+    expect(res.headers.get('content-type')).toMatch(/text\/event-stream/);
+    const events = await readSSEStream<RefinementEvent<Rubric>>(res);
+    expect(events.map((e) => e.type)).toEqual([
+      'generated',
+      'critiquing',
+      'critiqued',
+      'done',
+    ]);
   });
 
-  it('passes parsed spec context into the prompt', async () => {
-    mockedGenerateJSON.mockResolvedValueOnce(RUBRIC);
-    await POST(makeRequest({ parsed: PARSED }));
-    const promptArg = mockedGenerateJSON.mock.calls[0][0];
-    expect(promptArg).toContain('Cold email drafter');
-    expect(promptArg).toContain('sales');
+  it('streams a revise round when critique flags majors', async () => {
+    const issue = {
+      field: 'dimensions[0].weight',
+      severity: 'major' as const,
+      description: 'sum',
+      suggestion: 'rebalance',
+    };
+    vi.mocked(generateJSON)
+      .mockResolvedValueOnce(sampleRubric)
+      .mockResolvedValueOnce({ issues: [issue] })
+      .mockResolvedValueOnce(sampleRubric)
+      .mockResolvedValueOnce(cleanCritique);
+    const res = await POST(jsonReq({ parsed: sampleParsed }));
+    const events = await readSSEStream<RefinementEvent<Rubric>>(res);
+    expect(events.map((e) => e.type)).toEqual([
+      'generated',
+      'critiquing',
+      'critiqued',
+      'revising',
+      'revised',
+      'critiquing',
+      'critiqued',
+      'done',
+    ]);
+  });
+
+  it('emits error when generate throws', async () => {
+    vi.mocked(generateJSON).mockRejectedValueOnce(new Error('boom'));
+    const res = await POST(jsonReq({ parsed: sampleParsed }));
+    const events = await readSSEStream<RefinementEvent<Rubric>>(res);
+    expect(events.map((e) => e.type)).toEqual(['error']);
   });
 });

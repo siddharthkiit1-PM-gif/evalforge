@@ -1,73 +1,135 @@
-import type { ParsedSpec, Rubric, TestCase } from '@/lib/types';
+import type {
+  Issue,
+  ParsedSpec,
+  RefinementEvent,
+  Rubric,
+  TestCase,
+} from '@/lib/types';
 
-export type PageStatus =
+export type StagePhase =
   | 'idle'
-  | 'parsing'
-  | 'tests_generating'
-  | 'rubric_generating'
-  | 'ready'
+  | 'generating'
+  | 'critiquing'
+  | 'revising'
+  | 'done'
   | 'error';
 
+export type StageState<T> = {
+  phase: StagePhase;
+  pass: 0 | 1 | 2;
+  current: T | null;
+  issues: Issue[];
+};
+
+export type StageKey = 'parse' | 'tests' | 'rubric';
+
 export type PageState = {
-  status: PageStatus;
   spec: string;
-  parsed: ParsedSpec | null;
-  tests: TestCase[] | null;
-  rubric: Rubric | null;
-  error: string | null;
+  stages: {
+    parse: StageState<ParsedSpec>;
+    tests: StageState<TestCase[]>;
+    rubric: StageState<Rubric>;
+  };
+  error: { stage: StageKey; message: string; recoverable: boolean } | null;
 };
 
 export type PageAction =
-  | { type: 'PARSE_STARTED'; spec: string }
-  | { type: 'PARSE_SUCCEEDED'; parsed: ParsedSpec }
-  | { type: 'TESTS_STARTED' }
-  | { type: 'TESTS_SUCCEEDED'; tests: TestCase[] }
-  | { type: 'RUBRIC_STARTED' }
-  | { type: 'RUBRIC_SUCCEEDED'; rubric: Rubric }
-  | { type: 'FAILED'; error: string }
+  | { type: 'STAGE_START'; stage: StageKey }
+  | { type: 'STAGE_EVENT'; stage: StageKey; event: RefinementEvent<unknown> }
+  | { type: 'STAGE_ERR'; stage: StageKey; message: string; recoverable: boolean }
+  | { type: 'PIPELINE_START'; spec: string }
   | { type: 'RESET' };
 
+const idleStage = <T>(): StageState<T> => ({
+  phase: 'idle',
+  pass: 0,
+  current: null,
+  issues: [],
+});
+
 export const initialState: PageState = {
-  status: 'idle',
   spec: '',
-  parsed: null,
-  tests: null,
-  rubric: null,
+  stages: {
+    parse: idleStage<ParsedSpec>(),
+    tests: idleStage<TestCase[]>(),
+    rubric: idleStage<Rubric>(),
+  },
   error: null,
 };
 
+function applyEvent<T>(stage: StageState<T>, event: RefinementEvent<T>): StageState<T> {
+  switch (event.type) {
+    case 'generated':
+      return { ...stage, current: event.output, pass: 0 };
+    case 'critiquing':
+      return { ...stage, phase: 'critiquing', pass: event.pass };
+    case 'critiqued': {
+      const major = event.issues.filter((i) => i.severity === 'major');
+      return {
+        ...stage,
+        issues: event.issues,
+        phase: major.length === 0 ? 'done' : 'critiquing',
+      };
+    }
+    case 'revising':
+      return { ...stage, phase: 'revising', pass: event.pass };
+    case 'revised':
+      return { ...stage, phase: 'revising', current: event.output, pass: event.pass };
+    case 'done':
+      return { ...stage, phase: 'done', current: event.output };
+    case 'error':
+      return { ...stage, phase: 'error' };
+  }
+}
+
 export function reducer(state: PageState, action: PageAction): PageState {
   switch (action.type) {
-    case 'PARSE_STARTED':
-      return {
-        ...initialState,
-        status: 'parsing',
-        spec: action.spec,
-      };
-    case 'PARSE_SUCCEEDED':
+    case 'PIPELINE_START':
+      return { ...initialState, spec: action.spec };
+    case 'STAGE_START': {
+      const reset = idleStage();
       return {
         ...state,
-        status: 'tests_generating',
-        parsed: action.parsed,
+        stages: {
+          ...state.stages,
+          [action.stage]: { ...reset, phase: 'generating' },
+        },
+        error: null,
       };
-    case 'TESTS_STARTED':
-      return { ...state, status: 'tests_generating' };
-    case 'TESTS_SUCCEEDED':
+    }
+    case 'STAGE_EVENT': {
+      const current = state.stages[action.stage];
+      // Type narrowing: each stage holds a different T, but the reducer
+      // treats output opaquely. Cast at the boundary.
+      const updated = applyEvent(current as StageState<unknown>, action.event);
+      const next: PageState = {
+        ...state,
+        stages: { ...state.stages, [action.stage]: updated },
+      };
+      if (action.event.type === 'error') {
+        next.error = {
+          stage: action.stage,
+          message: action.event.message,
+          recoverable: false,
+        };
+      }
+      return next;
+    }
+    case 'STAGE_ERR': {
+      const current = state.stages[action.stage];
       return {
         ...state,
-        status: 'rubric_generating',
-        tests: action.tests,
+        stages: {
+          ...state.stages,
+          [action.stage]: { ...current, phase: 'error' },
+        },
+        error: {
+          stage: action.stage,
+          message: action.message,
+          recoverable: action.recoverable,
+        },
       };
-    case 'RUBRIC_STARTED':
-      return { ...state, status: 'rubric_generating' };
-    case 'RUBRIC_SUCCEEDED':
-      return {
-        ...state,
-        status: 'ready',
-        rubric: action.rubric,
-      };
-    case 'FAILED':
-      return { ...state, status: 'error', error: action.error };
+    }
     case 'RESET':
       return initialState;
     default:

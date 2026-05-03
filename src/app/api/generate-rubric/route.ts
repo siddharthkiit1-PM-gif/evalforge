@@ -1,19 +1,39 @@
 import { generateJSON } from '@/lib/gemini';
-import { buildGenerateRubricPrompt } from '@/lib/prompts';
-import type { ParsedSpec, Rubric } from '@/lib/types';
+import {
+  buildGenerateRubricPrompt,
+  buildGenerateRubricCritiquePrompt,
+  buildGenerateRubricRevisePrompt,
+} from '@/lib/prompts';
+import { runRefinement } from '@/lib/refinement';
+import type {
+  Issue,
+  ParsedSpec,
+  RefinementEvent,
+  Rubric,
+} from '@/lib/types';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
-function isParsedSpec(value: unknown): value is ParsedSpec {
-  if (typeof value !== 'object' || value === null) return false;
-  const v = value as Record<string, unknown>;
+const SSE_HEADERS = {
+  'content-type': 'text/event-stream',
+  'cache-control': 'no-cache, no-transform',
+  connection: 'keep-alive',
+} as const;
+
+function frame(event: RefinementEvent<Rubric>): string {
+  return `data: ${JSON.stringify(event)}\n\n`;
+}
+
+function isParsedSpec(v: unknown): v is ParsedSpec {
+  if (!v || typeof v !== 'object') return false;
+  const p = v as Partial<ParsedSpec>;
   return (
-    typeof v.feature === 'string' &&
-    Array.isArray(v.inputs) &&
-    Array.isArray(v.outputs) &&
-    Array.isArray(v.constraints) &&
-    typeof v.domain === 'string'
+    typeof p.feature === 'string' &&
+    Array.isArray(p.inputs) &&
+    Array.isArray(p.outputs) &&
+    Array.isArray(p.constraints) &&
+    typeof p.domain === 'string'
   );
 }
 
@@ -24,23 +44,38 @@ export async function POST(req: Request): Promise<Response> {
   } catch {
     return Response.json({ error: 'Invalid JSON body.' }, { status: 400 });
   }
-
   const parsed = (body as { parsed?: unknown }).parsed;
   if (!isParsedSpec(parsed)) {
-    return Response.json({ error: 'parsed must be a ParsedSpec object.' }, { status: 400 });
+    return Response.json(
+      { error: 'parsed must be a ParsedSpec object.' },
+      { status: 400 },
+    );
   }
 
-  try {
-    const rubric = await generateJSON<Rubric>(buildGenerateRubricPrompt(parsed));
-    if (!rubric.dimensions || rubric.dimensions.length === 0) {
-      return Response.json(
-        { error: 'Gemini returned no rubric dimensions.' },
-        { status: 500 },
-      );
-    }
-    return Response.json(rubric);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error.';
-    return Response.json({ error: message }, { status: 500 });
-  }
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const encoder = new TextEncoder();
+      const generator = runRefinement<Rubric>({
+        generate: () => generateJSON<Rubric>(buildGenerateRubricPrompt(parsed)),
+        critique: async (current) => {
+          const result = await generateJSON<{ issues: Issue[] }>(
+            buildGenerateRubricCritiquePrompt(parsed, current),
+          );
+          return Array.isArray(result?.issues) ? result.issues : [];
+        },
+        revise: (current, issues) =>
+          generateJSON<Rubric>(buildGenerateRubricRevisePrompt(current, issues)),
+        signal: req.signal,
+      });
+      try {
+        for await (const evt of generator) {
+          controller.enqueue(encoder.encode(frame(evt)));
+        }
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, { headers: SSE_HEADERS });
 }

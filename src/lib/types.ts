@@ -45,3 +45,26 @@ export type EvalResult = {
   scores: EvalScore[];
   passed: boolean;
 };
+
+// ──────────────────────────────────────────────────────────────────────────
+// Refinement loop (Sub-project 1)
+// ──────────────────────────────────────────────────────────────────────────
+
+// Issues are produced by critique calls and consumed by revise calls.
+// `field` is a JSON path into the stage's output (e.g. "tests[3].category").
+export type Issue = {
+  field: string;
+  severity: 'minor' | 'major';
+  description: string;
+  suggestion: string;
+};
+
+// Events emitted by `runRefinement` and serialized over SSE.
+export type RefinementEvent<T> =
+  | { type: 'generated'; pass: 0; output: T }
+  | { type: 'critiquing'; pass: 1 | 2 }
+  | { type: 'critiqued'; pass: 1 | 2; issues: Issue[] }
+  | { type: 'revising'; pass: 1 | 2 }
+  | { type: 'revised'; pass: 1 | 2; output: T }
+  | { type: 'done'; output: T }
+  | { type: 'error'; message: string };

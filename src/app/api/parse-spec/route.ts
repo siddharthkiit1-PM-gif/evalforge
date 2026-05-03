@@ -1,9 +1,24 @@
 import { generateJSON } from '@/lib/gemini';
-import { buildParseSpecPrompt } from '@/lib/prompts';
-import type { ParsedSpec } from '@/lib/types';
+import {
+  buildParseSpecPrompt,
+  buildParseSpecCritiquePrompt,
+  buildParseSpecRevisePrompt,
+} from '@/lib/prompts';
+import { runRefinement } from '@/lib/refinement';
+import type { Issue, ParsedSpec, RefinementEvent } from '@/lib/types';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
+
+const SSE_HEADERS = {
+  'content-type': 'text/event-stream',
+  'cache-control': 'no-cache, no-transform',
+  connection: 'keep-alive',
+} as const;
+
+function frame(event: RefinementEvent<ParsedSpec>): string {
+  return `data: ${JSON.stringify(event)}\n\n`;
+}
 
 export async function POST(req: Request): Promise<Response> {
   let body: unknown;
@@ -17,12 +32,32 @@ export async function POST(req: Request): Promise<Response> {
   if (typeof spec !== 'string' || spec.trim().length === 0) {
     return Response.json({ error: 'spec must be a non-empty string.' }, { status: 400 });
   }
+  const trimmed = spec.trim();
 
-  try {
-    const parsed = await generateJSON<ParsedSpec>(buildParseSpecPrompt(spec.trim()));
-    return Response.json(parsed);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error.';
-    return Response.json({ error: message }, { status: 500 });
-  }
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const encoder = new TextEncoder();
+      const generator = runRefinement<ParsedSpec>({
+        generate: () => generateJSON<ParsedSpec>(buildParseSpecPrompt(trimmed)),
+        critique: async (current) => {
+          const result = await generateJSON<{ issues: Issue[] }>(
+            buildParseSpecCritiquePrompt(trimmed, current),
+          );
+          return Array.isArray(result?.issues) ? result.issues : [];
+        },
+        revise: (current, issues) =>
+          generateJSON<ParsedSpec>(buildParseSpecRevisePrompt(current, issues)),
+        signal: req.signal,
+      });
+      try {
+        for await (const evt of generator) {
+          controller.enqueue(encoder.encode(frame(evt)));
+        }
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, { headers: SSE_HEADERS });
 }
