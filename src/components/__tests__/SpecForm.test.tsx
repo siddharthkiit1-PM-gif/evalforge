@@ -46,4 +46,11 @@ describe('SpecForm', () => {
     await user.click(screen.getByRole('button', { name: /generate eval suite/i }));
     expect(onSubmit).toHaveBeenCalledWith('hello spec');
   });
+
+  it('shows character counter and prevents typing past 5000 chars', () => {
+    render(<SpecForm onSubmit={() => {}} />);
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    expect(textarea).toHaveAttribute('maxlength', '5000');
+    expect(screen.getByText(/0\s*\/\s*5000/)).toBeInTheDocument();
+  });
 });

@@ -3,6 +3,8 @@ import type {
   ParsedSpec,
   RefinementEvent,
   Rubric,
+  RunEvent,
+  RunSnapshot,
   TestCase,
 } from '@/lib/types';
 
@@ -21,7 +23,7 @@ export type StageState<T> = {
   issues: Issue[];
 };
 
-export type StageKey = 'parse' | 'tests' | 'rubric';
+export type StageKey = 'parse' | 'tests' | 'rubric' | 'run';
 
 export type PageState = {
   spec: string;
@@ -29,6 +31,7 @@ export type PageState = {
     parse: StageState<ParsedSpec>;
     tests: StageState<TestCase[]>;
     rubric: StageState<Rubric>;
+    run: StageState<RunSnapshot>;
   };
   error: { stage: StageKey; message: string; recoverable: boolean } | null;
 };
@@ -36,6 +39,7 @@ export type PageState = {
 export type PageAction =
   | { type: 'STAGE_START'; stage: StageKey }
   | { type: 'STAGE_EVENT'; stage: StageKey; event: RefinementEvent<unknown> }
+  | { type: 'STAGE_RUN_EVENT'; event: RunEvent }
   | { type: 'STAGE_ERR'; stage: StageKey; message: string; recoverable: boolean }
   | { type: 'PIPELINE_START'; spec: string }
   | { type: 'RESET' };
@@ -53,6 +57,7 @@ export const initialState: PageState = {
     parse: idleStage<ParsedSpec>(),
     tests: idleStage<TestCase[]>(),
     rubric: idleStage<Rubric>(),
+    run: idleStage<RunSnapshot>(),
   },
   error: null,
 };
@@ -114,6 +119,35 @@ export function reducer(state: PageState, action: PageAction): PageState {
         };
       }
       return next;
+    }
+    case 'STAGE_RUN_EVENT': {
+      const cur = state.stages.run;
+      let phase = cur.phase;
+      let current = cur.current as RunSnapshot | null;
+      let error = state.error;
+      if (action.event.type === 'progress') {
+        current = {
+          kind: 'progress',
+          completed: action.event.completed,
+          total: action.event.total,
+          partialResults: action.event.partialResults,
+        };
+      } else if (action.event.type === 'done') {
+        phase = 'done';
+        current = {
+          kind: 'done',
+          results: action.event.results,
+          summary: action.event.summary,
+        };
+      } else if (action.event.type === 'error') {
+        phase = 'error';
+        error = { stage: 'run', message: action.event.message, recoverable: false };
+      }
+      return {
+        ...state,
+        stages: { ...state.stages, run: { ...cur, phase, current } },
+        error,
+      };
     }
     case 'STAGE_ERR': {
       const current = state.stages[action.stage];

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import SpecInput from '@/components/SpecInput';
+import { useEffect, useRef, useState } from 'react';
 import { EXAMPLES } from '@/lib/examples';
+
+const MAX_LEN = 5000;
 
 type Props = {
   onSubmit: (spec: string) => void;
@@ -10,6 +11,14 @@ type Props = {
 
 export default function SpecForm({ onSubmit }: Props) {
   const [spec, setSpec] = useState('');
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [spec]);
 
   const trimmed = spec.trim();
   const canSubmit = trimmed.length > 0;
@@ -27,7 +36,7 @@ export default function SpecForm({ onSubmit }: Props) {
           <button
             key={ex.id}
             type="button"
-            onClick={() => setSpec(ex.spec)}
+            onClick={() => setSpec(ex.spec.slice(0, MAX_LEN))}
             className="rounded-full border border-border bg-surface px-3 py-1 text-xs text-muted hover:border-border-hover hover:text-fg transition-colors"
           >
             {ex.label}
@@ -35,7 +44,19 @@ export default function SpecForm({ onSubmit }: Props) {
         ))}
       </div>
 
-      <SpecInput value={spec} onChange={setSpec} />
+      <textarea
+        ref={ref}
+        value={spec}
+        onChange={(e) => setSpec(e.target.value)}
+        placeholder="Paste an AI feature spec…"
+        rows={6}
+        maxLength={MAX_LEN}
+        className="w-full resize-none rounded-md border border-border bg-surface px-4 py-3 font-mono text-sm text-fg placeholder:text-dim focus:border-border-hover focus:outline-none disabled:opacity-50"
+      />
+
+      <p className="font-mono text-xs text-muted self-end">
+        {spec.length} / {MAX_LEN}
+      </p>
 
       <div className="flex justify-end">
         <button

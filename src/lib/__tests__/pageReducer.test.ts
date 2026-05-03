@@ -4,6 +4,7 @@ import type {
   Issue,
   ParsedSpec,
   Rubric,
+  RunSnapshot,
   TestCase,
 } from '@/lib/types';
 
@@ -153,5 +154,39 @@ describe('pageReducer', () => {
   it('RESET returns initial state', () => {
     const dirty = reducer(initialState, { type: 'STAGE_START', stage: 'parse' });
     expect(reducer(dirty, { type: 'RESET' })).toEqual(initialState);
+  });
+
+  it('run stage starts idle', () => {
+    expect(initialState.stages.run.phase).toBe('idle');
+  });
+
+  it('STAGE_START sets run.phase generating', () => {
+    const next = reducer(initialState, { type: 'STAGE_START', stage: 'run' });
+    expect(next.stages.run.phase).toBe('generating');
+  });
+
+  it('progress event updates current snapshot', () => {
+    const s1 = reducer(initialState, { type: 'STAGE_START', stage: 'run' });
+    const s2 = reducer(s1, {
+      type: 'STAGE_RUN_EVENT',
+      event: { type: 'progress', completed: 3, total: 20, partialResults: [] },
+    });
+    expect((s2.stages.run.current as RunSnapshot).kind).toBe('progress');
+  });
+
+  it('done event sets done phase', () => {
+    const s1 = reducer(initialState, { type: 'STAGE_START', stage: 'run' });
+    const s2 = reducer(s1, {
+      type: 'STAGE_RUN_EVENT',
+      event: { type: 'done', results: [], summary: { overall: 0, passedCount: 0, perDimension: {} } },
+    });
+    expect(s2.stages.run.phase).toBe('done');
+  });
+
+  it('error event records state.error', () => {
+    const s1 = reducer(initialState, { type: 'STAGE_START', stage: 'run' });
+    const s2 = reducer(s1, { type: 'STAGE_RUN_EVENT', event: { type: 'error', message: 'x' } });
+    expect(s2.stages.run.phase).toBe('error');
+    expect(s2.error?.message).toBe('x');
   });
 });

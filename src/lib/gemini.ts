@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 
-export const MODEL_ID = 'gemini-2.5-flash';
+export const MODEL_ID = 'gemini-2.5-flash-lite';
 
 let cachedClient: GoogleGenAI | null = null;
 function client(): GoogleGenAI {

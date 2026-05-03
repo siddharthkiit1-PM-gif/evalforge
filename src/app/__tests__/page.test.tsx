@@ -74,7 +74,9 @@ describe('Home page (SSE pipeline)', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /generate/i }));
     await waitFor(() =>
-      expect(screen.getByText(/Plan C wires the runner/i)).toBeInTheDocument(),
+      expect(
+        screen.getByRole('button', { name: /run 20 evals/i }),
+      ).toBeInTheDocument(),
     );
     expect(screen.getByText(/Test suite \(20\)/i)).toBeInTheDocument();
     expect(screen.getByText(/Rubric/i)).toBeInTheDocument();
@@ -129,6 +131,91 @@ describe('Home page (SSE pipeline)', () => {
     expect(errEl).toHaveAttribute('data-recoverable', 'false');
   });
 
+  it('renders Run 20 evals button after rubric stage completes', async () => {
+    mockFetchSequence([
+      mockSSEStream([
+        { type: 'generated', pass: 0, output: sampleParsed },
+        { type: 'critiquing', pass: 1 },
+        { type: 'critiqued', pass: 1, issues: [] },
+        { type: 'done', output: sampleParsed },
+      ]),
+      mockSSEStream([
+        { type: 'generated', pass: 0, output: sampleTests },
+        { type: 'critiquing', pass: 1 },
+        { type: 'critiqued', pass: 1, issues: [] },
+        { type: 'done', output: sampleTests },
+      ]),
+      mockSSEStream([
+        { type: 'generated', pass: 0, output: sampleRubric },
+        { type: 'critiquing', pass: 1 },
+        { type: 'critiqued', pass: 1, issues: [] },
+        { type: 'done', output: sampleRubric },
+      ]),
+    ]);
+    render(<Home />);
+    fireEvent.change(screen.getByPlaceholderText(/spec/i), {
+      target: { value: 'AI extracts obligations.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate/i }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /run 20 evals/i }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('clicking Run 20 evals starts run stage and renders Scorecard on done', async () => {
+    const sampleResults = sampleTests.map((t) => ({
+      testId: t.id,
+      output: 'ok',
+      scores: [
+        { dimensionId: 'a', score: 0.9, reasoning: 'good' },
+        { dimensionId: 'b', score: 0.8, reasoning: 'good' },
+      ],
+      passed: true,
+    }));
+    const sampleSummary = {
+      overall: 0.85,
+      passedCount: sampleResults.length,
+      perDimension: { a: 0.9, b: 0.8 },
+    };
+    mockFetchSequence([
+      mockSSEStream([
+        { type: 'generated', pass: 0, output: sampleParsed },
+        { type: 'critiquing', pass: 1 },
+        { type: 'critiqued', pass: 1, issues: [] },
+        { type: 'done', output: sampleParsed },
+      ]),
+      mockSSEStream([
+        { type: 'generated', pass: 0, output: sampleTests },
+        { type: 'critiquing', pass: 1 },
+        { type: 'critiqued', pass: 1, issues: [] },
+        { type: 'done', output: sampleTests },
+      ]),
+      mockSSEStream([
+        { type: 'generated', pass: 0, output: sampleRubric },
+        { type: 'critiquing', pass: 1 },
+        { type: 'critiqued', pass: 1, issues: [] },
+        { type: 'done', output: sampleRubric },
+      ]),
+      mockSSEStream([
+        { type: 'started', total: sampleTests.length },
+        { type: 'done', results: sampleResults, summary: sampleSummary },
+      ]),
+    ]);
+    render(<Home />);
+    fireEvent.change(screen.getByPlaceholderText(/spec/i), {
+      target: { value: 'AI extracts obligations.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate/i }));
+    const runBtn = await screen.findByRole('button', { name: /run 20 evals/i });
+    fireEvent.click(runBtn);
+    await waitFor(() =>
+      expect(screen.getByText(/passed/i)).toBeInTheDocument(),
+    );
+    expect(screen.getByText('0.85')).toBeInTheDocument();
+  });
+
   it('updates the test table live when a revised event arrives', async () => {
     const v0 = sampleTests.map((t, i) => (i === 0 ? { ...t, input: 'OLD' } : t));
     const v1 = sampleTests.map((t, i) => (i === 0 ? { ...t, input: 'NEW' } : t));
@@ -173,7 +260,9 @@ describe('Home page (SSE pipeline)', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /generate/i }));
     await waitFor(() =>
-      expect(screen.getByText(/Plan C wires the runner/i)).toBeInTheDocument(),
+      expect(
+        screen.getByRole('button', { name: /run 20 evals/i }),
+      ).toBeInTheDocument(),
     );
     expect(screen.getByText('NEW')).toBeInTheDocument();
     expect(screen.queryByText('OLD')).not.toBeInTheDocument();

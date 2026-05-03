@@ -105,7 +105,7 @@ describe('generateJSON', () => {
     expect(result).toEqual({ name: 'ada', score: 42 });
     expect(generateContentMock).toHaveBeenCalledTimes(1);
     expect(generateContentMock).toHaveBeenCalledWith({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-flash-lite',
       contents: 'prompt',
     });
   });

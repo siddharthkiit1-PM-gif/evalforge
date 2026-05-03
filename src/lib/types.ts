@@ -68,3 +68,22 @@ export type RefinementEvent<T> =
   | { type: 'revised'; pass: 1 | 2; output: T }
   | { type: 'done'; output: T }
   | { type: 'error'; message: string };
+
+import type { Summary } from '@/lib/scoring';
+
+// ──────────────────────────────────────────────────────────────────────────
+// Eval runner (Plan C)
+// ──────────────────────────────────────────────────────────────────────────
+
+// Snapshot of the runner's current state — shown to the user in the UI.
+// `progress` is emitted while the batch is running; `done` once on completion.
+export type RunSnapshot =
+  | { kind: 'progress'; completed: number; total: number; partialResults: ReadonlyArray<EvalResult | Error | undefined> }
+  | { kind: 'done'; results: EvalResult[]; summary: Summary };
+
+// Events emitted by /api/run-eval over SSE.
+export type RunEvent =
+  | { type: 'started'; total: number }
+  | { type: 'progress'; completed: number; total: number; partialResults: ReadonlyArray<EvalResult | Error | undefined> }
+  | { type: 'done'; results: EvalResult[]; summary: Summary }
+  | { type: 'error'; message: string };

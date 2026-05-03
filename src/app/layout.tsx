@@ -23,8 +23,15 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EvalForge",
-  description: "Paste an AI feature spec. Get a domain-aware eval suite that runs.",
+  title: "EvalForge — AI evals from one paste",
+  description:
+    "Paste an AI feature spec. Get a domain-aware eval suite — parsed spec, 20 test cases, scoring rubric — generated and refined by Gemini in three streamed stages, then run with an interactive scorecard.",
+  openGraph: {
+    title: "EvalForge — AI evals from one paste",
+    description:
+      "Paste an AI feature spec. Get a domain-aware eval suite that runs.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
@@ -37,7 +44,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-bg text-fg font-body">
         <Nav />
-        <main className="flex-1 mx-auto w-full max-w-[1200px] px-6 py-12">
+        <main className="flex-1 mx-auto w-full max-w-[1200px] px-4 py-8 sm:px-6 sm:py-12">
           {children}
         </main>
         <Footer />

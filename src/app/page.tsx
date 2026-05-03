@@ -5,12 +5,16 @@ import SpecForm from '@/components/SpecForm';
 import DomainBadge from '@/components/DomainBadge';
 import TestSuiteTable from '@/components/TestSuiteTable';
 import RubricPanel from '@/components/RubricPanel';
+import EvalRunButton from '@/components/EvalRunButton';
+import EvalProgress from '@/components/EvalProgress';
+import Scorecard from '@/components/Scorecard';
 import { initialState, reducer } from '@/lib/pageReducer';
 import type { StageKey, StageState } from '@/lib/pageReducer';
 import type {
   ParsedSpec,
   RefinementEvent,
   Rubric,
+  RunEvent,
   TestCase,
 } from '@/lib/types';
 
@@ -18,6 +22,7 @@ const STAGE_LABEL: Record<StageKey, string> = {
   parse: 'parsed spec',
   tests: 'tests',
   rubric: 'rubric',
+  run: 'run',
 };
 
 // Marker error class so the catch in `run()` can distinguish errors raised
@@ -94,6 +99,57 @@ async function runStage<T>(
   throw new Error('Stream closed without any output');
 }
 
+// SSE consumer for the run stage. Parses each frame as a `RunEvent` and
+// dispatches `STAGE_RUN_EVENT`. Resolves when the stream closes; rejects on
+// transport errors or `error` frames (wrapped in SSEEventError so the catch
+// site can preserve the reducer-recorded `recoverable: false`).
+async function runRunStage(
+  url: string,
+  body: unknown,
+  dispatch: (action: { type: 'STAGE_RUN_EVENT'; event: RunEvent }) => void,
+): Promise<void> {
+  console.log('[run-eval] POST', url);
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  console.log('[run-eval] status', res.status);
+  if (!res.ok) {
+    const err = await res
+      .json()
+      .catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? res.statusText);
+  }
+  if (!res.body) throw new Error('Empty response body');
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let errored: string | null = null;
+  let sawDone = false;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) {
+      console.log('[run-eval] stream closed; sawDone=', sawDone, 'errored=', errored);
+      break;
+    }
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) !== -1) {
+      const frame = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      const line = frame.split('\n').find((l) => l.startsWith('data: '));
+      if (!line) continue;
+      const event = JSON.parse(line.slice(6)) as RunEvent;
+      console.log('[run-eval] event', event.type, event.type === 'progress' ? `${event.completed}/${event.total}` : '');
+      dispatch({ type: 'STAGE_RUN_EVENT', event });
+      if (event.type === 'error') errored = event.message;
+      if (event.type === 'done') sawDone = true;
+    }
+  }
+  if (errored) throw new SSEEventError(errored);
+}
+
 export default function Home() {
   const [state, dispatch] = useReducer(reducer, initialState);
 
@@ -137,10 +193,27 @@ export default function Home() {
   const parsed = state.stages.parse.current;
   const tests = state.stages.tests.current;
   const rubric = state.stages.rubric.current;
+  const runState = state.stages.run;
   const ready =
     state.stages.parse.phase === 'done' &&
     state.stages.tests.phase === 'done' &&
     state.stages.rubric.phase === 'done';
+
+  async function runEval() {
+    if (!parsed || !tests || !rubric) return;
+    dispatch({ type: 'STAGE_START', stage: 'run' });
+    try {
+      await runRunStage(
+        '/api/run-eval',
+        { parsed, rubric, tests },
+        dispatch,
+      );
+    } catch (err) {
+      if (err instanceof SSEEventError) return;
+      const message = err instanceof Error ? err.message : 'Unknown error.';
+      dispatch({ type: 'STAGE_ERR', stage: 'run', message, recoverable: true });
+    }
+  }
 
   const parseStatus = statusText('parse', state.stages.parse);
   const testsStatus = statusText('tests', state.stages.tests);
@@ -197,11 +270,34 @@ export default function Home() {
         </section>
       )}
 
-      {ready && (
-        <p className="font-mono text-xs text-success">
-          Ready. Plan C wires the runner.
-        </p>
+      {ready && parsed && tests && rubric && runState.phase === 'idle' && (
+        <EvalRunButton onRun={runEval} running={false} />
       )}
+
+      {ready && parsed && tests && rubric && runState.phase === 'generating' && (
+        <div className="flex flex-col gap-4">
+          <EvalRunButton onRun={runEval} running={true} />
+          <EvalProgress
+            completed={runState.current?.kind === 'progress' ? runState.current.completed : 0}
+            total={runState.current?.kind === 'progress' ? runState.current.total : tests.length}
+          />
+        </div>
+      )}
+
+      {ready &&
+        parsed &&
+        tests &&
+        rubric &&
+        runState.phase === 'done' &&
+        runState.current?.kind === 'done' && (
+          <Scorecard
+            results={runState.current.results}
+            rubric={rubric}
+            spec={state.spec}
+            parsed={parsed}
+            tests={tests}
+          />
+        )}
 
       {state.error && (
         <p
