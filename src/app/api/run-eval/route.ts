@@ -58,9 +58,9 @@ export async function POST(req: Request): Promise<Response> {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let ticker: ReturnType<typeof setInterval> | null = null;
-      let lastSnapshot: { completed: number; partial: ReadonlyArray<EvalResult | Error | undefined> } = {
+      let lastSnapshot: { completed: number; partialResults: ReadonlyArray<EvalResult | Error | undefined> } = {
         completed: 0,
-        partial: [],
+        partialResults: [],
       };
       let closed = false;
 
@@ -81,7 +81,7 @@ export async function POST(req: Request): Promise<Response> {
             type: 'progress',
             completed: lastSnapshot.completed,
             total: tests.length,
-            partialResults: lastSnapshot.partial,
+            partialResults: lastSnapshot.partialResults,
           });
         }, TICK_MS);
 
@@ -101,7 +101,7 @@ export async function POST(req: Request): Promise<Response> {
           concurrency: 2,
           gapMs: 15000,
           signal: req.signal,
-          onProgress: (completed, p) => { lastSnapshot = { completed, partial: p }; },
+          onProgress: (completed, p) => { lastSnapshot = { completed, partialResults: p }; },
         });
 
         const results: EvalResult[] = partial.map((r, i) =>

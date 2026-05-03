@@ -79,6 +79,70 @@ describe('/api/run-eval', () => {
     }
   });
 
+  it('emits at least one progress frame from the 2 s ticker while a judge is in flight', async () => {
+    // Real timers (fake timers fight with Node's async streaming + microtask
+    // scheduling inside ReadableStream in Vitest, leading to flaky reads).
+    // We hold BOTH judge calls (route runs at concurrency 2) so `completed`
+    // stays at 0 long enough for the 2 s ticker to fire at least once, then
+    // release to drain.
+    const { generateJSON } = await import('@/lib/gemini');
+    type Judge = { output: string; scores: { dimensionId: string; score: number; reasoning: string }[] };
+    const releases: Array<(v: Judge) => void> = [];
+    const makeHeld = () => new Promise<Judge>((resolve) => { releases.push(resolve); });
+    (generateJSON as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(makeHeld())
+      .mockReturnValueOnce(makeHeld());
+
+    const { POST } = await import('@/app/api/run-eval/route');
+    const res = await POST(new Request('http://x', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parsed, rubric, tests }),
+    }));
+    if (!res.body) throw new Error('no body');
+
+    // Drain the stream in the background so the ticker frames are consumed
+    // promptly and the controller doesn't fill its queue.
+    const collected: RunEvent[] = [];
+    const drainPromise = (async () => {
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buf.indexOf('\n\n')) !== -1) {
+          const frameStr = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          const line = frameStr.split('\n').find((l) => l.startsWith('data: '));
+          if (line) collected.push(JSON.parse(line.slice(6)) as RunEvent);
+        }
+      }
+    })();
+
+    // Wait past one ticker tick (2 s) while both judges are still pending.
+    await new Promise((r) => setTimeout(r, 2500));
+
+    const midProgress = collected.filter((e) => e.type === 'progress');
+    expect(midProgress.length).toBeGreaterThanOrEqual(1);
+    const firstProgress = midProgress[0];
+    if (firstProgress.type === 'progress') {
+      expect(firstProgress.completed).toBe(0);
+      expect(firstProgress.total).toBe(tests.length);
+    }
+
+    // Release both judges and let the stream finish.
+    for (const release of releases) {
+      release({ output: 'o', scores: [{ dimensionId: 'a', score: 1, reasoning: 'r' }] });
+    }
+    await drainPromise;
+
+    const last = collected[collected.length - 1];
+    expect(last.type).toBe('done');
+  }, 10000);
+
   it('emits error frame when an unexpected error escapes the batch', async () => {
     // We patch summarize to throw, since per-item errors are caught by runBatched
     vi.doMock('@/lib/scoring', async () => {
