@@ -47,9 +47,9 @@ export default function ResultsTable({
       <table className="w-full text-left">
         <thead className="bg-elevated">
           <tr className="font-mono text-xs uppercase tracking-wide text-muted">
-            <th className="px-4 py-2 w-24">Test</th>
-            <th className="px-4 py-2">Output</th>
-            <th className="px-4 py-2 w-24">Result</th>
+            <th className="px-2 py-2 sm:px-4 w-16 sm:w-24">Test</th>
+            <th className="px-2 py-2 sm:px-4">Output</th>
+            <th className="px-2 py-2 sm:px-4 w-16 sm:w-24">Result</th>
           </tr>
         </thead>
         <tbody>
@@ -62,13 +62,13 @@ export default function ResultsTable({
                   onClick={() => toggle(r.testId)}
                   className="cursor-pointer border-t border-border bg-surface align-top hover:bg-elevated"
                 >
-                  <td className="px-4 py-2 font-mono text-xs text-muted">
+                  <td className="px-2 py-2 sm:px-4 font-mono text-xs text-muted">
                     {r.testId}
                   </td>
-                  <td className="px-4 py-2 font-body text-sm text-fg">
+                  <td className="px-2 py-2 sm:px-4 font-body text-sm text-fg">
                     {truncate(r.output)}
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="px-2 py-2 sm:px-4">
                     <span
                       className={
                         'font-mono text-xs ' +
@@ -81,7 +81,7 @@ export default function ResultsTable({
                 </tr>
                 {isOpen && (
                   <tr className="border-t border-border bg-surface">
-                    <td colSpan={3} className="px-4 py-3">
+                    <td colSpan={3} className="px-2 py-3 sm:px-4">
                       <ul className="flex flex-col gap-2">
                         {r.scores.map((s) => {
                           const dim = dimById.get(s.dimensionId);

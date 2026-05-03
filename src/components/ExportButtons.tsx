@@ -38,7 +38,7 @@ export default function ExportButtons(props: Props) {
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
       <button
         type="button"
         onClick={onBundle}
