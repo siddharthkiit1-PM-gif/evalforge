@@ -108,11 +108,13 @@ async function runRunStage(
   body: unknown,
   dispatch: (action: { type: 'STAGE_RUN_EVENT'; event: RunEvent }) => void,
 ): Promise<void> {
+  console.log('[run-eval] POST', url);
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
+  console.log('[run-eval] status', res.status);
   if (!res.ok) {
     const err = await res
       .json()
@@ -124,9 +126,13 @@ async function runRunStage(
   const decoder = new TextDecoder();
   let buf = '';
   let errored: string | null = null;
+  let sawDone = false;
   for (;;) {
     const { value, done } = await reader.read();
-    if (done) break;
+    if (done) {
+      console.log('[run-eval] stream closed; sawDone=', sawDone, 'errored=', errored);
+      break;
+    }
     buf += decoder.decode(value, { stream: true });
     let idx;
     while ((idx = buf.indexOf('\n\n')) !== -1) {
@@ -135,8 +141,10 @@ async function runRunStage(
       const line = frame.split('\n').find((l) => l.startsWith('data: '));
       if (!line) continue;
       const event = JSON.parse(line.slice(6)) as RunEvent;
+      console.log('[run-eval] event', event.type, event.type === 'progress' ? `${event.completed}/${event.total}` : '');
       dispatch({ type: 'STAGE_RUN_EVENT', event });
       if (event.type === 'error') errored = event.message;
+      if (event.type === 'done') sawDone = true;
     }
   }
   if (errored) throw new SSEEventError(errored);

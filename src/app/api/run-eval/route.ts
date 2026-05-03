@@ -86,23 +86,30 @@ export async function POST(req: Request): Promise<Response> {
         }, TICK_MS);
 
         const judgeOne = async (test: TestCase): Promise<EvalResult> => {
-          const raw = await generateJSON<RawJudge>(buildRunEvalPrompt(parsed, rubric, test));
-          const scores = raw.scores ?? [];
-          const passedScore = weightedOverall(scores, rubric);
-          return {
-            testId: test.id,
-            output: raw.output ?? '',
-            scores,
-            passed: passedScore >= PASS_THRESHOLD_DEFAULT,
-          };
+          try {
+            const raw = await generateJSON<RawJudge>(buildRunEvalPrompt(parsed, rubric, test));
+            const scores = raw.scores ?? [];
+            const passedScore = weightedOverall(scores, rubric);
+            return {
+              testId: test.id,
+              output: raw.output ?? '',
+              scores,
+              passed: passedScore >= PASS_THRESHOLD_DEFAULT,
+            };
+          } catch (err) {
+            console.error(`[run-eval] judgeOne failed for ${test.id}:`, err instanceof Error ? err.message : err);
+            throw err;
+          }
         };
 
+        console.log(`[run-eval] starting batch: ${tests.length} tests, concurrency=2, gapMs=4000`);
         const partial = await runBatched<TestCase, EvalResult>(tests, judgeOne, {
           concurrency: 2,
           gapMs: 4000,
           signal: req.signal,
           onProgress: (completed, p) => { lastSnapshot = { completed, partialResults: p }; },
         });
+        console.log(`[run-eval] batch resolved: ${partial.length} results, ${partial.filter((r) => r instanceof Error).length} errors`);
 
         const results: EvalResult[] = partial.map((r, i) =>
           r instanceof Error
@@ -110,9 +117,11 @@ export async function POST(req: Request): Promise<Response> {
             : (r as EvalResult)
         );
         const summary = summarize(results, rubric, PASS_THRESHOLD_DEFAULT);
+        console.log(`[run-eval] emitting done: overall=${summary.overall.toFixed(3)}, passed=${summary.passedCount}/${results.length}`);
 
         safeEnqueue({ type: 'done', results, summary });
       } catch (err) {
+        console.error('[run-eval] outer error:', err instanceof Error ? err.message : err);
         const message = err instanceof Error ? err.message : 'unknown error';
         safeEnqueue({ type: 'error', message });
       } finally {
