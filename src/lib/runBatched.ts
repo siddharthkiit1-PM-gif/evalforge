@@ -2,7 +2,7 @@ export type RunBatchedOptions<U> = {
   concurrency: number;
   gapMs: number;
   signal?: AbortSignal;
-  onProgress?: (completed: number, partial: (U | Error)[]) => void;
+  onProgress?: (completed: number, partial: ReadonlyArray<U | Error | undefined>) => void;
 };
 
 export async function runBatched<T, U>(
@@ -54,10 +54,11 @@ export async function runBatched<T, U>(
         if (r === ABORTED) return;
         results[i] = r as U;
       } catch (err) {
+        if (signal?.aborted) return;
         results[i] = err instanceof Error ? err : new Error(String(err));
       }
       completed++;
-      onProgress?.(completed, results.slice(0, completed));
+      onProgress?.(completed, results.slice());
     }
   };
 

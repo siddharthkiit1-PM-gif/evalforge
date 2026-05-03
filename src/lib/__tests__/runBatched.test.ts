@@ -83,4 +83,38 @@ describe('runBatched', () => {
     await vi.runAllTimersAsync();
     await assertion;
   });
+
+  it('onProgress snapshot includes the full array at concurrency > 1, with holes', async () => {
+    const onProgress = vi.fn();
+    const fn = async (n: number) => {
+      if (n === 0) await new Promise((r) => setTimeout(r, 50));
+      return n;
+    };
+    const promise = runBatched([0, 1], fn, { concurrency: 2, gapMs: 0, onProgress });
+    await vi.runAllTimersAsync();
+    await promise;
+    expect(onProgress.mock.calls[0][0]).toBe(1);
+    expect(onProgress.mock.calls[0][1]).toEqual([undefined, 1]);
+  });
+
+  it('does not record or report when fn throws because signal aborted', async () => {
+    const ctrl = new AbortController();
+    const onProgress = vi.fn();
+    const fn = async (_: number, sig?: AbortSignal) => {
+      await new Promise((resolve, reject) => {
+        const t = setTimeout(resolve, 100);
+        sig?.addEventListener('abort', () => {
+          clearTimeout(t);
+          reject(new Error('AbortError'));
+        });
+      });
+      return 0;
+    };
+    const promise = runBatched([1, 2], fn, { concurrency: 1, gapMs: 0, signal: ctrl.signal, onProgress });
+    const assertion = expect(promise).rejects.toThrow(/abort/i);
+    setTimeout(() => ctrl.abort(), 20);
+    await vi.runAllTimersAsync();
+    await assertion;
+    expect(onProgress).not.toHaveBeenCalled();
+  });
 });
