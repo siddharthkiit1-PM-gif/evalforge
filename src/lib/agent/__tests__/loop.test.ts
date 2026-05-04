@@ -69,7 +69,9 @@ describe('runAgentLoop', () => {
     let i = 0;
     (callPlanner as unknown as ReturnType<typeof vi.fn>).mockImplementation(async () => {
       i++;
-      const overall = 0.5 + i * 0.05;
+      // 0.06 increment avoids FP rounding (0.6 - 0.55 = 0.04999... in IEEE 754)
+      // and keeps overall < 0.99 at i=5 so all-pass doesn't fire before iteration-cap.
+      const overall = 0.5 + i * 0.06;
       return {
         toolName: 'rerun_eval',
         args: {},
