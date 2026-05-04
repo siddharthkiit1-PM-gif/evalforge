@@ -9,8 +9,8 @@ vi.mock('ai', async () => {
 });
 
 import { generateText } from 'ai';
-import { runOrchestrator } from '@/lib/agent/orchestrator';
-import type { OrchestratorEvent } from '@/lib/agent/types';
+import { runOrchestrator, applyClarificationAnswer } from '@/lib/agent/orchestrator';
+import type { OrchestratorEvent, OrchestratorState } from '@/lib/agent/types';
 
 type FakeStep = {
   toolName: string;
@@ -138,5 +138,52 @@ describe('runOrchestrator', () => {
     );
     const err = events.find((e) => e.type === 'orch-error');
     expect(err?.type === 'orch-error' && err.message).toMatch(/no tool call/);
+  });
+});
+
+describe('applyClarificationAnswer', () => {
+  function paused(): OrchestratorState {
+    return {
+      spec: 's',
+      history: [],
+      clarifications: [],
+      budget: {
+        capTokens: 100,
+        capIterations: 10,
+        capScoreThreshold: 0.8,
+        spentTokens: 0,
+        iterations: 0,
+      },
+      pendingClarify: { question: 'which domain?', askedAt: 1000 },
+    };
+  }
+
+  it('returns state unchanged when there is no pendingClarify', () => {
+    const state: OrchestratorState = { ...paused(), pendingClarify: undefined };
+    expect(applyClarificationAnswer(state, 'medical')).toBe(state);
+  });
+
+  it('clears pendingClarify and appends the exchange', () => {
+    const before = Date.now();
+    const next = applyClarificationAnswer(paused(), 'medical');
+    expect(next.pendingClarify).toBeUndefined();
+    expect(next.clarifications).toHaveLength(1);
+    expect(next.clarifications[0].question).toBe('which domain?');
+    expect(next.clarifications[0].answer).toBe('medical');
+    expect(next.clarifications[0].askedAt).toBe(1000);
+    expect(next.clarifications[0].answeredAt).toBeGreaterThanOrEqual(before);
+  });
+
+  it('preserves prior clarifications when appending a new one', () => {
+    const state: OrchestratorState = {
+      ...paused(),
+      clarifications: [
+        { question: 'q0', answer: 'a0', askedAt: 1, answeredAt: 2 },
+      ],
+    };
+    const next = applyClarificationAnswer(state, 'a1');
+    expect(next.clarifications).toHaveLength(2);
+    expect(next.clarifications[0].answer).toBe('a0');
+    expect(next.clarifications[1].answer).toBe('a1');
   });
 });
