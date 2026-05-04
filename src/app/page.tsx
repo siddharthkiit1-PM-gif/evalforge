@@ -8,6 +8,7 @@ import RubricPanel from '@/components/RubricPanel';
 import EvalRunButton from '@/components/EvalRunButton';
 import EvalProgress from '@/components/EvalProgress';
 import Scorecard from '@/components/Scorecard';
+import AgentPanel from '@/components/AgentPanel';
 import { initialState, reducer } from '@/lib/pageReducer';
 import type { StageKey, StageState } from '@/lib/pageReducer';
 import type {
@@ -17,12 +18,14 @@ import type {
   RunEvent,
   TestCase,
 } from '@/lib/types';
+import type { AgentEvent } from '@/lib/agent/types';
 
 const STAGE_LABEL: Record<StageKey, string> = {
   parse: 'parsed spec',
   tests: 'tests',
   rubric: 'rubric',
   run: 'run',
+  improve: 'improvement',
 };
 
 // Marker error class so the catch in `run()` can distinguish errors raised
@@ -150,6 +153,43 @@ async function runRunStage(
   if (errored) throw new SSEEventError(errored);
 }
 
+async function runImproveStage(
+  url: string,
+  body: unknown,
+  dispatch: (action: { type: 'IMPROVE_EVENT'; event: AgentEvent }) => void,
+): Promise<void> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? res.statusText);
+  }
+  if (!res.body) throw new Error('Empty response body');
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let errored: string | null = null;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) !== -1) {
+      const frame = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      const line = frame.split('\n').find((l) => l.startsWith('data: '));
+      if (!line) continue;
+      const event = JSON.parse(line.slice(6)) as AgentEvent;
+      dispatch({ type: 'IMPROVE_EVENT', event });
+      if (event.type === 'error') errored = event.message;
+    }
+  }
+  if (errored) throw new SSEEventError(errored);
+}
+
 export default function Home() {
   const [state, dispatch] = useReducer(reducer, initialState);
 
@@ -213,6 +253,29 @@ export default function Home() {
       const message = err instanceof Error ? err.message : 'Unknown error.';
       dispatch({ type: 'STAGE_ERR', stage: 'run', message, recoverable: true });
     }
+  }
+
+  async function runImprove() {
+    if (!parsed || !tests || !rubric) return;
+    if (runState.phase !== 'done' || runState.current?.kind !== 'done') return;
+    const summary = runState.current.summary;
+    const results = runState.current.results;
+    dispatch({ type: 'IMPROVE_START' });
+    try {
+      await runImproveStage(
+        '/api/improve',
+        { parsed, tests, rubric, results, summary },
+        dispatch,
+      );
+    } catch (err) {
+      if (err instanceof SSEEventError) return;
+      const message = err instanceof Error ? err.message : 'Unknown error.';
+      dispatch({ type: 'IMPROVE_EVENT', event: { type: 'error', message } });
+    }
+  }
+
+  function restorePrevious() {
+    dispatch({ type: 'IMPROVE_RESET' });
   }
 
   const parseStatus = statusText('parse', state.stages.parse);
@@ -290,13 +353,27 @@ export default function Home() {
         rubric &&
         runState.phase === 'done' &&
         runState.current?.kind === 'done' && (
-          <Scorecard
-            results={runState.current.results}
-            rubric={rubric}
-            spec={state.spec}
-            parsed={parsed}
-            tests={tests}
-          />
+          <>
+            <Scorecard
+              results={runState.current.results}
+              rubric={rubric}
+              spec={state.spec}
+              parsed={parsed}
+              tests={tests}
+            />
+            <AgentPanel
+              state={state.stages.improve}
+              triggerable={(() => {
+                const s = runState.current.summary;
+                return (
+                  s.overall < 0.75 ||
+                  Object.values(s.perDimension).some((v) => v < 0.6)
+                );
+              })()}
+              onImprove={runImprove}
+              onRestore={restorePrevious}
+            />
+          </>
         )}
 
       {state.error && (
