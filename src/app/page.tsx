@@ -8,6 +8,8 @@ import RubricPanel from '@/components/RubricPanel';
 import EvalRunButton from '@/components/EvalRunButton';
 import EvalProgress from '@/components/EvalProgress';
 import Scorecard from '@/components/Scorecard';
+import AgentPanel from '@/components/AgentPanel';
+import OrchestratorPanel from '@/components/OrchestratorPanel';
 import { initialState, reducer } from '@/lib/pageReducer';
 import type { StageKey, StageState } from '@/lib/pageReducer';
 import type {
@@ -17,12 +19,15 @@ import type {
   RunEvent,
   TestCase,
 } from '@/lib/types';
+import type { AgentEvent, OrchestratorEvent } from '@/lib/agent/types';
 
 const STAGE_LABEL: Record<StageKey, string> = {
   parse: 'parsed spec',
   tests: 'tests',
   rubric: 'rubric',
   run: 'run',
+  improve: 'improvement',
+  orchestrate: 'orchestration',
 };
 
 // Marker error class so the catch in `run()` can distinguish errors raised
@@ -150,8 +155,111 @@ async function runRunStage(
   if (errored) throw new SSEEventError(errored);
 }
 
+async function runOrchestrateStage(
+  url: string,
+  body: unknown,
+  dispatch: (action: { type: 'ORCHESTRATE_EVENT'; event: OrchestratorEvent }) => void,
+): Promise<void> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? res.statusText);
+  }
+  if (!res.body) throw new Error('Empty response body');
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let errored: string | null = null;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) !== -1) {
+      const frame = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      const line = frame.split('\n').find((l) => l.startsWith('data: '));
+      if (!line) continue;
+      const event = JSON.parse(line.slice(6)) as OrchestratorEvent;
+      dispatch({ type: 'ORCHESTRATE_EVENT', event });
+      if (event.type === 'orch-error') errored = event.message;
+    }
+  }
+  if (errored) throw new SSEEventError(errored);
+}
+
+async function runImproveStage(
+  url: string,
+  body: unknown,
+  dispatch: (action: { type: 'IMPROVE_EVENT'; event: AgentEvent }) => void,
+): Promise<void> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? res.statusText);
+  }
+  if (!res.body) throw new Error('Empty response body');
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let errored: string | null = null;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) !== -1) {
+      const frame = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      const line = frame.split('\n').find((l) => l.startsWith('data: '));
+      if (!line) continue;
+      const event = JSON.parse(line.slice(6)) as AgentEvent;
+      dispatch({ type: 'IMPROVE_EVENT', event });
+      if (event.type === 'error') errored = event.message;
+    }
+  }
+  if (errored) throw new SSEEventError(errored);
+}
+
 export default function Home() {
   const [state, dispatch] = useReducer(reducer, initialState);
+
+  async function runOrchestrate(spec: string) {
+    dispatch({ type: 'ORCHESTRATE_START', spec });
+    try {
+      await runOrchestrateStage('/api/orchestrate', { spec }, dispatch);
+    } catch (err) {
+      if (err instanceof SSEEventError) return;
+      const message = err instanceof Error ? err.message : 'Unknown error.';
+      dispatch({ type: 'ORCHESTRATE_EVENT', event: { type: 'orch-error', message } });
+    }
+  }
+
+  async function resumeOrchestrate(id: string, answer: string) {
+    try {
+      await runOrchestrateStage('/api/orchestrate/resume', { id, answer }, dispatch);
+    } catch (err) {
+      if (err instanceof SSEEventError) return;
+      const message = err instanceof Error ? err.message : 'Unknown error.';
+      dispatch({ type: 'ORCHESTRATE_EVENT', event: { type: 'orch-error', message } });
+    }
+  }
+
+  function onSpecSubmit(spec: string, agentMode: boolean) {
+    if (agentMode) {
+      void runOrchestrate(spec);
+    } else {
+      void run(spec);
+    }
+  }
 
   async function run(spec: string) {
     dispatch({ type: 'PIPELINE_START', spec });
@@ -215,6 +323,29 @@ export default function Home() {
     }
   }
 
+  async function runImprove() {
+    if (!parsed || !tests || !rubric) return;
+    if (runState.phase !== 'done' || runState.current?.kind !== 'done') return;
+    const summary = runState.current.summary;
+    const results = runState.current.results;
+    dispatch({ type: 'IMPROVE_START' });
+    try {
+      await runImproveStage(
+        '/api/improve',
+        { parsed, tests, rubric, results, summary },
+        dispatch,
+      );
+    } catch (err) {
+      if (err instanceof SSEEventError) return;
+      const message = err instanceof Error ? err.message : 'Unknown error.';
+      dispatch({ type: 'IMPROVE_EVENT', event: { type: 'error', message } });
+    }
+  }
+
+  function restorePrevious() {
+    dispatch({ type: 'IMPROVE_RESET' });
+  }
+
   const parseStatus = statusText('parse', state.stages.parse);
   const testsStatus = statusText('tests', state.stages.tests);
   const rubricStatus = statusText('rubric', state.stages.rubric);
@@ -228,7 +359,15 @@ export default function Home() {
         </p>
       </header>
 
-      <SpecForm onSubmit={run} />
+      <SpecForm onSubmit={onSpecSubmit} />
+
+      {state.stages.orchestrate.phase !== 'idle' && (
+        <OrchestratorPanel
+          state={state.stages.orchestrate}
+          onReset={() => dispatch({ type: 'ORCHESTRATE_RESET' })}
+          onResume={(id, answer) => void resumeOrchestrate(id, answer)}
+        />
+      )}
 
       {parseStatus && (
         <p className="font-mono text-xs text-muted">{parseStatus}</p>
@@ -290,13 +429,27 @@ export default function Home() {
         rubric &&
         runState.phase === 'done' &&
         runState.current?.kind === 'done' && (
-          <Scorecard
-            results={runState.current.results}
-            rubric={rubric}
-            spec={state.spec}
-            parsed={parsed}
-            tests={tests}
-          />
+          <>
+            <Scorecard
+              results={runState.current.results}
+              rubric={rubric}
+              spec={state.spec}
+              parsed={parsed}
+              tests={tests}
+            />
+            <AgentPanel
+              state={state.stages.improve}
+              triggerable={(() => {
+                const s = runState.current.summary;
+                return (
+                  s.overall < 0.75 ||
+                  Object.values(s.perDimension).some((v) => v < 0.6)
+                );
+              })()}
+              onImprove={runImprove}
+              onRestore={restorePrevious}
+            />
+          </>
         )}
 
       {state.error && (

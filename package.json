@@ -12,9 +12,12 @@
   },
   "dependencies": {
     "@google/genai": "^1.51.0",
+    "@upstash/redis": "^1.37.0",
+    "ai": "^6.0.174",
     "next": "16.2.4",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

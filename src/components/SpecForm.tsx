@@ -6,11 +6,12 @@ import { EXAMPLES } from '@/lib/examples';
 const MAX_LEN = 5000;
 
 type Props = {
-  onSubmit: (spec: string) => void;
+  onSubmit: (spec: string, agentMode: boolean) => void;
 };
 
 export default function SpecForm({ onSubmit }: Props) {
   const [spec, setSpec] = useState('');
+  const [agentMode, setAgentMode] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -27,7 +28,7 @@ export default function SpecForm({ onSubmit }: Props) {
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (canSubmit) onSubmit(trimmed);
+        if (canSubmit) onSubmit(trimmed, agentMode);
       }}
       className="flex flex-col gap-4"
     >
@@ -58,13 +59,22 @@ export default function SpecForm({ onSubmit }: Props) {
         {spec.length} / {MAX_LEN}
       </p>
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        <label className="flex items-center gap-2 font-mono text-xs text-muted cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={agentMode}
+            onChange={(e) => setAgentMode(e.target.checked)}
+            className="h-3 w-3 accent-accent"
+          />
+          Run as agent (experimental)
+        </label>
         <button
           type="submit"
           disabled={!canSubmit}
           className="rounded-md bg-accent px-4 py-2 font-display text-sm text-bg disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
         >
-          Generate Eval Suite
+          {agentMode ? 'Run Agent' : 'Generate Eval Suite'}
         </button>
       </div>
     </form>

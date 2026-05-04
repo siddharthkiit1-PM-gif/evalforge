@@ -1,7 +1,4 @@
-import { generateJSON } from '@/lib/gemini';
-import { runBatched } from '@/lib/runBatched';
-import { buildRunEvalPrompt } from '@/lib/prompts';
-import { summarize, weightedOverall } from '@/lib/scoring';
+import { runEval } from '@/lib/runEval';
 import type { EvalResult, ParsedSpec, Rubric, TestCase, RunEvent } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -14,7 +11,6 @@ const SSE_HEADERS = {
 } as const;
 
 const TICK_MS = 2000;
-const PASS_THRESHOLD_DEFAULT = 0.7;
 
 const enc = new TextEncoder();
 const frame = (e: RunEvent) => enc.encode(`data: ${JSON.stringify(e)}\n\n`);
@@ -32,8 +28,6 @@ function isTests(x: unknown): x is TestCase[] {
   return Array.isArray(x)
     && x.every((t) => t && typeof t === 'object' && 'id' in t && 'input' in t);
 }
-
-type RawJudge = { output?: unknown; scores?: { dimensionId: string; score: number; reasoning: string }[] };
 
 export async function POST(req: Request): Promise<Response> {
   let body: { parsed?: unknown; rubric?: unknown; tests?: unknown };
@@ -85,44 +79,14 @@ export async function POST(req: Request): Promise<Response> {
           });
         }, TICK_MS);
 
-        const judgeOne = async (test: TestCase): Promise<EvalResult> => {
-          try {
-            const raw = await generateJSON<RawJudge>(buildRunEvalPrompt(parsed, rubric, test));
-            const scores = raw.scores ?? [];
-            const passedScore = weightedOverall(scores, rubric);
-            const output =
-              typeof raw.output === 'string'
-                ? raw.output
-                : raw.output == null
-                  ? ''
-                  : JSON.stringify(raw.output);
-            return {
-              testId: test.id,
-              output,
-              scores,
-              passed: passedScore >= PASS_THRESHOLD_DEFAULT,
-            };
-          } catch (err) {
-            console.error(`[run-eval] judgeOne failed for ${test.id}:`, err instanceof Error ? err.message : err);
-            throw err;
-          }
-        };
-
         console.log(`[run-eval] starting batch: ${tests.length} tests, concurrency=2, gapMs=4000`);
-        const partial = await runBatched<TestCase, EvalResult>(tests, judgeOne, {
-          concurrency: 2,
-          gapMs: 4000,
+        const { results, summary } = await runEval(parsed, rubric, tests, {
           signal: req.signal,
-          onProgress: (completed, p) => { lastSnapshot = { completed, partialResults: p }; },
+          onProgress: (completed, p) => {
+            lastSnapshot = { completed, partialResults: p };
+          },
         });
-        console.log(`[run-eval] batch resolved: ${partial.length} results, ${partial.filter((r) => r instanceof Error).length} errors`);
-
-        const results: EvalResult[] = partial.map((r, i) =>
-          r instanceof Error
-            ? { testId: tests[i].id, output: '', scores: [], passed: false }
-            : (r as EvalResult)
-        );
-        const summary = summarize(results, rubric, PASS_THRESHOLD_DEFAULT);
+        console.log(`[run-eval] batch resolved: ${results.length} results, ${results.filter((r) => r.scores.length === 0).length} errors`);
         console.log(`[run-eval] emitting done: overall=${summary.overall.toFixed(3)}, passed=${summary.passedCount}/${results.length}`);
 
         safeEnqueue({ type: 'done', results, summary });
