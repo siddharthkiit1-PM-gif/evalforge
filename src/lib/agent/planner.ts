@@ -1,8 +1,9 @@
 import { generateText, stepCountIs } from 'ai';
+import { google } from '@ai-sdk/google';
 import type { AgentState, AgentIteration, ToolName, StateUpdate } from '@/lib/agent/types';
 import { buildToolRegistry } from '@/lib/agent/tools';
 
-const PLANNER_MODEL = 'google/gemini-2.5-pro';
+const PLANNER_MODEL = google('gemini-2.5-pro');
 
 type CallPlannerInput = {
   state: AgentState;

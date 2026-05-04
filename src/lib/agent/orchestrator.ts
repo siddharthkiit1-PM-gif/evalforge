@@ -1,4 +1,5 @@
 import { generateText, stepCountIs } from 'ai';
+import { google } from '@ai-sdk/google';
 import {
   newBudget,
   tokensFromUsage,
@@ -17,7 +18,7 @@ import type {
   OrchIteration,
 } from '@/lib/agent/types';
 
-const PLANNER_MODEL = 'google/gemini-2.5-pro';
+const PLANNER_MODEL = google('gemini-2.5-pro');
 
 export type OrchestratorInput = {
   id: string;
