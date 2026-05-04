@@ -7,6 +7,7 @@ import type {
   RunSnapshot,
   TestCase,
 } from '@/lib/types';
+import type { AgentEvent, AgentState, Snapshot, SnapshotDiff } from '@/lib/agent/types';
 
 export type StagePhase =
   | 'idle'
@@ -23,7 +24,14 @@ export type StageState<T> = {
   issues: Issue[];
 };
 
-export type StageKey = 'parse' | 'tests' | 'rubric' | 'run';
+export type ImproveStageState =
+  | { phase: 'idle' }
+  | { phase: 'running'; events: AgentEvent[]; snapshot: Snapshot | null }
+  | { phase: 'done-committed'; events: AgentEvent[]; snapshot: Snapshot; finalState: AgentState; diff: SnapshotDiff }
+  | { phase: 'done-rolled-back'; events: AgentEvent[]; snapshot: Snapshot; restored: Snapshot }
+  | { phase: 'error'; events: AgentEvent[]; snapshot: Snapshot | null; message: string };
+
+export type StageKey = 'parse' | 'tests' | 'rubric' | 'run' | 'improve';
 
 export type PageState = {
   spec: string;
@@ -32,6 +40,7 @@ export type PageState = {
     tests: StageState<TestCase[]>;
     rubric: StageState<Rubric>;
     run: StageState<RunSnapshot>;
+    improve: ImproveStageState;
   };
   error: { stage: StageKey; message: string; recoverable: boolean } | null;
 };
@@ -42,7 +51,10 @@ export type PageAction =
   | { type: 'STAGE_RUN_EVENT'; event: RunEvent }
   | { type: 'STAGE_ERR'; stage: StageKey; message: string; recoverable: boolean }
   | { type: 'PIPELINE_START'; spec: string }
-  | { type: 'RESET' };
+  | { type: 'RESET' }
+  | { type: 'IMPROVE_START' }
+  | { type: 'IMPROVE_EVENT'; event: AgentEvent }
+  | { type: 'IMPROVE_RESET' };
 
 const idleStage = <T>(): StageState<T> => ({
   phase: 'idle',
@@ -58,6 +70,7 @@ export const initialState: PageState = {
     tests: idleStage<TestCase[]>(),
     rubric: idleStage<Rubric>(),
     run: idleStage<RunSnapshot>(),
+    improve: { phase: 'idle' },
   },
   error: null,
 };
@@ -166,6 +179,55 @@ export function reducer(state: PageState, action: PageAction): PageState {
     }
     case 'RESET':
       return initialState;
+    case 'IMPROVE_START': {
+      return {
+        ...state,
+        stages: {
+          ...state.stages,
+          improve: { phase: 'running', events: [], snapshot: null },
+        },
+        error: null,
+      };
+    }
+    case 'IMPROVE_EVENT': {
+      const cur = state.stages.improve;
+      const events = cur.phase === 'idle' ? [action.event] : [...(cur as { events?: AgentEvent[] }).events ?? [], action.event];
+      const snapshot =
+        action.event.type === 'started'
+          ? action.event.snapshot
+          : cur.phase === 'idle'
+            ? null
+            : (cur as { snapshot?: Snapshot | null }).snapshot ?? null;
+
+      let next: ImproveStageState = { phase: 'running', events, snapshot };
+      if (action.event.type === 'committed') {
+        next = {
+          phase: 'done-committed',
+          events,
+          snapshot: snapshot as Snapshot,
+          finalState: action.event.finalState,
+          diff: action.event.diff,
+        };
+      } else if (action.event.type === 'rolled-back') {
+        next = {
+          phase: 'done-rolled-back',
+          events,
+          snapshot: snapshot as Snapshot,
+          restored: action.event.restored,
+        };
+      } else if (action.event.type === 'error') {
+        next = {
+          phase: 'error',
+          events,
+          snapshot,
+          message: action.event.message,
+        };
+      }
+      return { ...state, stages: { ...state.stages, improve: next } };
+    }
+    case 'IMPROVE_RESET': {
+      return { ...state, stages: { ...state.stages, improve: { phase: 'idle' } } };
+    }
     default:
       return state;
   }
