@@ -1,5 +1,5 @@
-import { runOrchestrator } from '@/lib/agent/orchestrator';
-import { saveState, deleteState } from '@/lib/orchState/store';
+import { runOrchestrator, applyClarificationAnswer } from '@/lib/agent/orchestrator';
+import { loadState, saveState, deleteState } from '@/lib/orchState/store';
 import type { OrchestratorEvent, OrchestratorState } from '@/lib/agent/types';
 
 export const runtime = 'nodejs';
@@ -15,7 +15,7 @@ const enc = new TextEncoder();
 const frame = (e: OrchestratorEvent) => enc.encode(`data: ${JSON.stringify(e)}\n\n`);
 
 export async function POST(req: Request): Promise<Response> {
-  let body: { spec?: unknown };
+  let body: { id?: unknown; answer?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -24,14 +24,36 @@ export async function POST(req: Request): Promise<Response> {
       headers: { 'content-type': 'application/json' },
     });
   }
-  if (typeof body.spec !== 'string' || body.spec.trim().length === 0) {
-    return new Response(JSON.stringify({ error: 'spec must be a non-empty string' }), {
+  if (typeof body.id !== 'string' || body.id.length === 0) {
+    return new Response(JSON.stringify({ error: 'id required' }), {
       status: 400,
       headers: { 'content-type': 'application/json' },
     });
   }
-  const spec = body.spec;
-  const id = crypto.randomUUID();
+  if (typeof body.answer !== 'string' || body.answer.trim().length === 0) {
+    return new Response(JSON.stringify({ error: 'answer required' }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+  const id = body.id;
+  const answer = body.answer.trim();
+
+  const saved = await loadState(id);
+  if (!saved) {
+    return new Response(JSON.stringify({ error: 'session expired or unknown id' }), {
+      status: 410,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+  if (!saved.pendingClarify) {
+    return new Response(JSON.stringify({ error: 'session is not awaiting clarification' }), {
+      status: 409,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
+  const resumed = applyClarificationAnswer(saved, answer);
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -62,14 +84,17 @@ export async function POST(req: Request): Promise<Response> {
           } else if (kind === 'done') {
             await deleteState(id);
           }
-          // error/aborted: leave whatever was last saved (if any) for debugging
         } catch (err) {
-          console.error('[orchestrate] checkpoint failed:', err);
+          console.error('[orchestrate/resume] checkpoint failed:', err);
         }
       };
 
       try {
-        for await (const evt of runOrchestrator({ id, spec }, req.signal, { onCheckpoint })) {
+        for await (const evt of runOrchestrator(
+          { id, spec: resumed.spec },
+          req.signal,
+          { initialState: resumed, onCheckpoint },
+        )) {
           safeEnqueue(evt);
         }
       } catch (err) {

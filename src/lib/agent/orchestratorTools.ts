@@ -6,6 +6,7 @@ import { generateTestsTool } from '@/lib/agent/tools/generateTestsTool';
 import { generateRubricTool } from '@/lib/agent/tools/generateRubricTool';
 import { runEvalNowTool } from '@/lib/agent/tools/runEvalNow';
 import { earlyStopTool } from '@/lib/agent/tools/earlyStop';
+import { clarifyTool } from '@/lib/agent/tools/clarify';
 import { diagnoseFailures } from '@/lib/agent/tools/diagnose';
 import { addTests } from '@/lib/agent/tools/addTests';
 import { addAdversarialTests } from '@/lib/agent/tools/addAdversarial';
@@ -79,6 +80,12 @@ export function buildOrchestratorRegistry(ctx: OrchToolContext) {
         'Voluntarily stop the orchestration. Use when scores are good enough or further iteration would not help. Provide a short reason.',
       inputSchema: z.object({ reason: z.string() }),
       execute: async (args) => earlyStopTool(args, ctx),
+    }),
+    clarify_with_user: tool({
+      description:
+        'Pause and ask the user a single targeted clarifying question. Use sparingly — only when the spec is ambiguous in a way that would change which tools you call next (e.g. unclear domain, missing failure mode, contradictory constraints). The orchestration suspends until the user answers; resume continues automatically.',
+      inputSchema: z.object({ question: z.string() }),
+      execute: async (args) => clarifyTool(args, ctx),
     }),
   };
 
@@ -154,6 +161,7 @@ export const ORCH_TOOL_NAMES = [
   'generate_rubric',
   'run_eval_now',
   'early_stop',
+  'clarify_with_user',
   'diagnose_failures',
   'add_tests',
   'add_adversarial_tests',

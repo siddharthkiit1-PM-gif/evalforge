@@ -69,6 +69,7 @@ export type OrchToolName =
   | 'generate_rubric'
   | 'run_eval_now'
   | 'early_stop'
+  | 'clarify_with_user'
   | ToolName;
 
 export type OrchBudget = {
@@ -77,6 +78,18 @@ export type OrchBudget = {
   capScoreThreshold: number;
   spentTokens: number;
   iterations: number;
+};
+
+export type PendingClarify = {
+  question: string;
+  askedAt: number;
+};
+
+export type ClarifyExchange = {
+  question: string;
+  answer: string;
+  askedAt: number;
+  answeredAt: number;
 };
 
 export type OrchestratorState = {
@@ -88,6 +101,9 @@ export type OrchestratorState = {
   history: OrchIteration[];
   budget: OrchBudget;
   earlyStopReason?: string;
+  pendingClarify?: PendingClarify;
+  clarifications: ClarifyExchange[];
+  spec: string;
 };
 
 export type OrchIteration = {
@@ -105,7 +121,7 @@ export type OrchStopReason =
   | 'early-stop';
 
 export type OrchestratorEvent =
-  | { type: 'orch-started'; budget: OrchBudget }
+  | { type: 'orch-started'; id: string; budget: OrchBudget }
   | { type: 'orch-iteration'; n: number }
   | { type: 'orch-tool-call'; n: number; name: OrchToolName; args: unknown }
   | { type: 'orch-tool-result'; n: number; name: OrchToolName; public: unknown }
@@ -117,6 +133,7 @@ export type OrchestratorEvent =
       rubric?: Rubric;
       summary?: Summary;
     }
+  | { type: 'orch-paused'; id: string; question: string }
   | { type: 'orch-done'; reason: OrchStopReason; finalState: OrchestratorState }
   | { type: 'orch-error'; message: string }
   | { type: 'orch-aborted' };

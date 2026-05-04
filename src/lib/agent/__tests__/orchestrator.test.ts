@@ -62,7 +62,7 @@ describe('runOrchestrator', () => {
     );
 
     const events = await collect(
-      runOrchestrator({ spec: 'a feature' }, new AbortController().signal),
+      runOrchestrator({ id: 'test-1', spec: 'a feature' }, new AbortController().signal),
     );
 
     const types = events.map((e) => e.type);
@@ -91,7 +91,7 @@ describe('runOrchestrator', () => {
 
     const events = await collect(
       runOrchestrator(
-        { spec: 's', budget: { capIterations: 2 } },
+        { id: 'test-2', spec: 's', budget: { capIterations: 2 } },
         new AbortController().signal,
       ),
     );
@@ -115,7 +115,7 @@ describe('runOrchestrator', () => {
 
     const events = await collect(
       runOrchestrator(
-        { spec: 's', budget: { capTokens: 500, capIterations: 10 } },
+        { id: 'test-3', spec: 's', budget: { capTokens: 500, capIterations: 10 } },
         new AbortController().signal,
       ),
     );
@@ -127,14 +127,14 @@ describe('runOrchestrator', () => {
   it('emits orch-aborted when signal is already aborted', async () => {
     const ac = new AbortController();
     ac.abort();
-    const events = await collect(runOrchestrator({ spec: 's' }, ac.signal));
+    const events = await collect(runOrchestrator({ id: 'test-4', spec: 's' }, ac.signal));
     expect(events.some((e) => e.type === 'orch-aborted')).toBe(true);
   });
 
   it('emits orch-error when planner returns no tool call', async () => {
     mockGenerateText.mockResolvedValueOnce({ steps: [{ toolCalls: [], toolResults: [] }], usage: { totalTokens: 10 } } as never);
     const events = await collect(
-      runOrchestrator({ spec: 's' }, new AbortController().signal),
+      runOrchestrator({ id: 'test-5', spec: 's' }, new AbortController().signal),
     );
     const err = events.find((e) => e.type === 'orch-error');
     expect(err?.type === 'orch-error' && err.message).toMatch(/no tool call/);

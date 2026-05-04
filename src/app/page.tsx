@@ -243,6 +243,16 @@ export default function Home() {
     }
   }
 
+  async function resumeOrchestrate(id: string, answer: string) {
+    try {
+      await runOrchestrateStage('/api/orchestrate/resume', { id, answer }, dispatch);
+    } catch (err) {
+      if (err instanceof SSEEventError) return;
+      const message = err instanceof Error ? err.message : 'Unknown error.';
+      dispatch({ type: 'ORCHESTRATE_EVENT', event: { type: 'orch-error', message } });
+    }
+  }
+
   function onSpecSubmit(spec: string, agentMode: boolean) {
     if (agentMode) {
       void runOrchestrate(spec);
@@ -355,6 +365,7 @@ export default function Home() {
         <OrchestratorPanel
           state={state.stages.orchestrate}
           onReset={() => dispatch({ type: 'ORCHESTRATE_RESET' })}
+          onResume={(id, answer) => void resumeOrchestrate(id, answer)}
         />
       )}
 

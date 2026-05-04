@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { OrchestrateStageState } from '@/lib/pageReducer';
 import type { OrchestratorEvent, OrchToolName } from '@/lib/agent/types';
 
@@ -61,9 +62,11 @@ const REASON_LABEL: Record<string, string> = {
 export default function OrchestratorPanel({
   state,
   onReset,
+  onResume,
 }: {
   state: OrchestrateStageState;
   onReset: () => void;
+  onResume: (id: string, answer: string) => void;
 }) {
   if (state.phase === 'idle') return null;
 
@@ -73,7 +76,7 @@ export default function OrchestratorPanel({
   const summary =
     state.phase === 'done'
       ? state.finalState.summary
-      : state.phase === 'running'
+      : state.phase === 'running' || state.phase === 'awaiting-clarification'
         ? state.latest.summary
         : undefined;
 
@@ -109,6 +112,13 @@ export default function OrchestratorPanel({
             </li>
           ))}
         </ul>
+      )}
+
+      {state.phase === 'awaiting-clarification' && (
+        <ClarificationForm
+          question={state.question}
+          onSubmit={(answer) => onResume(state.id, answer)}
+        />
       )}
 
       {summary && (
@@ -158,5 +168,48 @@ export default function OrchestratorPanel({
         </div>
       )}
     </section>
+  );
+}
+
+function ClarificationForm({
+  question,
+  onSubmit,
+}: {
+  question: string;
+  onSubmit: (answer: string) => void;
+}) {
+  const [answer, setAnswer] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const trimmed = answer.trim();
+  const handle = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trimmed || submitted) return;
+    setSubmitted(true);
+    onSubmit(trimmed);
+  };
+  return (
+    <form
+      onSubmit={handle}
+      className="flex flex-col gap-2 rounded-md border border-border bg-surface p-3"
+    >
+      <p className="font-mono text-xs text-muted">Agent is asking</p>
+      <p className="font-body text-sm text-fg">{question}</p>
+      <textarea
+        value={answer}
+        onChange={(e) => setAnswer(e.target.value)}
+        rows={3}
+        disabled={submitted}
+        className="rounded-md border border-border bg-bg p-2 font-mono text-xs text-fg disabled:opacity-50"
+        placeholder="Your answer…"
+        autoFocus
+      />
+      <button
+        type="submit"
+        disabled={!trimmed || submitted}
+        className="self-start rounded-md border border-border px-3 py-1 font-mono text-xs text-fg hover:border-border-hover disabled:opacity-50"
+      >
+        {submitted ? 'Resuming…' : 'Send'}
+      </button>
+    </form>
   );
 }

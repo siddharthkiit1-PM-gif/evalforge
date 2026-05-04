@@ -34,7 +34,8 @@ export type ImproveStageState =
 
 export type OrchestrateStageState =
   | { phase: 'idle' }
-  | { phase: 'running'; events: OrchestratorEvent[]; latest: Partial<OrchestratorState> }
+  | { phase: 'running'; id: string | null; events: OrchestratorEvent[]; latest: Partial<OrchestratorState> }
+  | { phase: 'awaiting-clarification'; id: string; question: string; events: OrchestratorEvent[]; latest: Partial<OrchestratorState> }
   | { phase: 'done'; events: OrchestratorEvent[]; reason: OrchStopReason; finalState: OrchestratorState }
   | { phase: 'error'; events: OrchestratorEvent[]; message: string };
 
@@ -246,7 +247,7 @@ export function reducer(state: PageState, action: PageAction): PageState {
         spec: action.spec,
         stages: {
           ...initialState.stages,
-          orchestrate: { phase: 'running', events: [], latest: {} },
+          orchestrate: { phase: 'running', id: null, events: [], latest: {} },
         },
       };
     }
@@ -254,7 +255,10 @@ export function reducer(state: PageState, action: PageAction): PageState {
       const cur = state.stages.orchestrate;
       const events =
         cur.phase === 'idle' ? [action.event] : [...(cur as { events?: OrchestratorEvent[] }).events ?? [], action.event];
-      const prevLatest = cur.phase === 'running' ? cur.latest : {};
+      const prevLatest =
+        cur.phase === 'running' || cur.phase === 'awaiting-clarification' ? cur.latest : {};
+      const prevId =
+        cur.phase === 'running' ? cur.id : cur.phase === 'awaiting-clarification' ? cur.id : null;
       let latest = prevLatest;
       if (action.event.type === 'orch-state') {
         latest = {
@@ -266,8 +270,19 @@ export function reducer(state: PageState, action: PageAction): PageState {
         };
       }
 
-      let next: OrchestrateStageState = { phase: 'running', events, latest };
-      if (action.event.type === 'orch-done') {
+      let id = prevId;
+      if (action.event.type === 'orch-started') id = action.event.id;
+
+      let next: OrchestrateStageState = { phase: 'running', id, events, latest };
+      if (action.event.type === 'orch-paused') {
+        next = {
+          phase: 'awaiting-clarification',
+          id: action.event.id,
+          question: action.event.question,
+          events,
+          latest,
+        };
+      } else if (action.event.type === 'orch-done') {
         next = {
           phase: 'done',
           events,
