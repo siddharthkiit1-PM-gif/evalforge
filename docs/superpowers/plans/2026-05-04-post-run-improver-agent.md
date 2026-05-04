@@ -51,13 +51,13 @@
 
 - [ ] **Step 1: Verify clean baseline**
 
-Run: `cd /Users/siddharthagrawal/evalforge && git status && pnpm test:run 2>&1 | tail -5`
+Run: `cd /Users/siddharthagrawal/evalforge && git status && npx vitest run 2>&1 | tail -5`
 
 Expected: clean working tree on `dev`. All existing tests pass.
 
 - [ ] **Step 2: Install AI SDK and Zod**
 
-Run: `cd /Users/siddharthagrawal/evalforge && pnpm add ai zod`
+Run: `cd /Users/siddharthagrawal/evalforge && npm install ai zod`
 
 Expected: `package.json` and lockfile updated. No peer-dep warnings that fail the install.
 
@@ -73,14 +73,14 @@ If the env var is missing the route will return a 500 with a clear error message
 
 - [ ] **Step 4: Verify install + tests still green**
 
-Run: `cd /Users/siddharthagrawal/evalforge && pnpm test:run 2>&1 | tail -5`
+Run: `cd /Users/siddharthagrawal/evalforge && npx vitest run 2>&1 | tail -5`
 
 Expected: same test count as before, all pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add package.json pnpm-lock.yaml
+git add package.json package-lock.json
 git commit -m "chore: add ai-sdk and zod for post-run improver agent"
 ```
 
@@ -154,7 +154,7 @@ describe('agent types', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/siddharthagrawal/evalforge && pnpm test:run src/lib/agent/__tests__/types.test.ts`
+Run: `cd /Users/siddharthagrawal/evalforge && npx vitest run src/lib/agent/__tests__/types.test.ts`
 
 Expected: FAIL — `Cannot find module '@/lib/agent/types'`.
 
@@ -241,7 +241,7 @@ export type AgentEvent =
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/siddharthagrawal/evalforge && pnpm test:run src/lib/agent/__tests__/types.test.ts`
+Run: `cd /Users/siddharthagrawal/evalforge && npx vitest run src/lib/agent/__tests__/types.test.ts`
 
 Expected: PASS, 4/4 tests.
 
@@ -368,7 +368,7 @@ describe('diffSnapshots', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/siddharthagrawal/evalforge && pnpm test:run src/lib/agent/__tests__/snapshot.test.ts`
+Run: `cd /Users/siddharthagrawal/evalforge && npx vitest run src/lib/agent/__tests__/snapshot.test.ts`
 
 Expected: FAIL — `Cannot find module '@/lib/agent/snapshot'`.
 
@@ -445,7 +445,7 @@ export function diffSnapshots(before: Snapshot, after: Snapshot): SnapshotDiff {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/siddharthagrawal/evalforge && pnpm test:run src/lib/agent/__tests__/snapshot.test.ts`
+Run: `cd /Users/siddharthagrawal/evalforge && npx vitest run src/lib/agent/__tests__/snapshot.test.ts`
 
 Expected: PASS, 6/6 tests.
 
@@ -565,7 +565,7 @@ describe('shouldStop', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/lib/agent/__tests__/triggers.test.ts`
+Run: `npx vitest run src/lib/agent/__tests__/triggers.test.ts`
 
 Expected: FAIL — `Cannot find module '@/lib/agent/triggers'`.
 
@@ -616,7 +616,7 @@ export function shouldStop(history: AgentIteration[], threshold: number): StopRe
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/siddharthagrawal/evalforge && pnpm test:run src/lib/agent/__tests__/triggers.test.ts`
+Run: `cd /Users/siddharthagrawal/evalforge && npx vitest run src/lib/agent/__tests__/triggers.test.ts`
 
 Expected: PASS, 9/9 tests.
 
@@ -719,7 +719,7 @@ describe('runEval', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/siddharthagrawal/evalforge && pnpm test:run src/lib/__tests__/runEval.test.ts`
+Run: `cd /Users/siddharthagrawal/evalforge && npx vitest run src/lib/__tests__/runEval.test.ts`
 
 Expected: FAIL — `Cannot find module '@/lib/runEval'`.
 
@@ -798,7 +798,7 @@ export async function runEval(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/siddharthagrawal/evalforge && pnpm test:run src/lib/__tests__/runEval.test.ts`
+Run: `cd /Users/siddharthagrawal/evalforge && npx vitest run src/lib/__tests__/runEval.test.ts`
 
 Expected: PASS, 3/3 tests.
 
@@ -829,7 +829,7 @@ Remove now-unused imports (`runBatched`, `buildRunEvalPrompt`, `summarize`, `wei
 
 - [ ] **Step 6: Run all tests to confirm no regression**
 
-Run: `cd /Users/siddharthagrawal/evalforge && pnpm test:run`
+Run: `cd /Users/siddharthagrawal/evalforge && npx vitest run`
 
 Expected: all tests pass, including any existing `/api/run-eval` route tests.
 
@@ -877,7 +877,7 @@ describe('TOOL_NAMES', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/lib/agent/tools/__tests__/index.test.ts`
+Run: `npx vitest run src/lib/agent/tools/__tests__/index.test.ts`
 
 Expected: FAIL — module not found.
 
@@ -918,7 +918,7 @@ export type AgentToolContext = {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/siddharthagrawal/evalforge && pnpm test:run src/lib/agent/tools/__tests__/index.test.ts`
+Run: `cd /Users/siddharthagrawal/evalforge && npx vitest run src/lib/agent/tools/__tests__/index.test.ts`
 
 Expected: PASS, 1/1.
 
@@ -1003,7 +1003,7 @@ describe('diagnoseFailures', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/siddharthagrawal/evalforge && pnpm test:run src/lib/agent/tools/__tests__/diagnose.test.ts`
+Run: `cd /Users/siddharthagrawal/evalforge && npx vitest run src/lib/agent/tools/__tests__/diagnose.test.ts`
 
 Expected: FAIL — module not found.
 
@@ -1072,7 +1072,7 @@ export async function diagnoseFailures(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/siddharthagrawal/evalforge && pnpm test:run src/lib/agent/tools/__tests__/diagnose.test.ts`
+Run: `cd /Users/siddharthagrawal/evalforge && npx vitest run src/lib/agent/tools/__tests__/diagnose.test.ts`
 
 Expected: PASS, 2/2.
 
@@ -1150,7 +1150,7 @@ describe('addTests', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/lib/agent/tools/__tests__/addTests.test.ts`
+Run: `npx vitest run src/lib/agent/tools/__tests__/addTests.test.ts`
 
 Expected: FAIL — module not found.
 
@@ -1234,7 +1234,7 @@ export async function addTests(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/siddharthagrawal/evalforge && pnpm test:run src/lib/agent/tools/__tests__/addTests.test.ts`
+Run: `cd /Users/siddharthagrawal/evalforge && npx vitest run src/lib/agent/tools/__tests__/addTests.test.ts`
 
 Expected: PASS, 3/3.
 
@@ -1302,7 +1302,7 @@ describe('addAdversarialTests', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/lib/agent/tools/__tests__/addAdversarial.test.ts`
+Run: `npx vitest run src/lib/agent/tools/__tests__/addAdversarial.test.ts`
 
 Expected: FAIL — module not found.
 
@@ -1384,7 +1384,7 @@ export async function addAdversarialTests(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm test:run src/lib/agent/tools/__tests__/addAdversarial.test.ts`
+Run: `npx vitest run src/lib/agent/tools/__tests__/addAdversarial.test.ts`
 
 Expected: PASS, 2/2.
 
@@ -1464,7 +1464,7 @@ describe('reviseRubric', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/lib/agent/tools/__tests__/reviseRubric.test.ts`
+Run: `npx vitest run src/lib/agent/tools/__tests__/reviseRubric.test.ts`
 
 Expected: FAIL — module not found.
 
@@ -1531,7 +1531,7 @@ export async function reviseRubric(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm test:run src/lib/agent/tools/__tests__/reviseRubric.test.ts`
+Run: `npx vitest run src/lib/agent/tools/__tests__/reviseRubric.test.ts`
 
 Expected: PASS, 3/3.
 
@@ -1602,7 +1602,7 @@ describe('tightenRubricDescriptors', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/lib/agent/tools/__tests__/tightenDescriptors.test.ts`
+Run: `npx vitest run src/lib/agent/tools/__tests__/tightenDescriptors.test.ts`
 
 Expected: FAIL — module not found.
 
@@ -1652,7 +1652,7 @@ export async function tightenRubricDescriptors(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm test:run src/lib/agent/tools/__tests__/tightenDescriptors.test.ts`
+Run: `npx vitest run src/lib/agent/tools/__tests__/tightenDescriptors.test.ts`
 
 Expected: PASS, 2/2.
 
@@ -1724,7 +1724,7 @@ describe('rewriteTest', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/lib/agent/tools/__tests__/rewriteTest.test.ts`
+Run: `npx vitest run src/lib/agent/tools/__tests__/rewriteTest.test.ts`
 
 Expected: FAIL — module not found.
 
@@ -1772,7 +1772,7 @@ export async function rewriteTest(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm test:run src/lib/agent/tools/__tests__/rewriteTest.test.ts`
+Run: `npx vitest run src/lib/agent/tools/__tests__/rewriteTest.test.ts`
 
 Expected: PASS, 2/2.
 
@@ -1845,7 +1845,7 @@ describe('rerunEval', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/lib/agent/tools/__tests__/rerunEval.test.ts`
+Run: `npx vitest run src/lib/agent/tools/__tests__/rerunEval.test.ts`
 
 Expected: FAIL — module not found.
 
@@ -1881,7 +1881,7 @@ export async function rerunEval(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm test:run src/lib/agent/tools/__tests__/rerunEval.test.ts`
+Run: `npx vitest run src/lib/agent/tools/__tests__/rerunEval.test.ts`
 
 Expected: PASS, 2/2.
 
@@ -1947,7 +1947,7 @@ describe('buildToolRegistry', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/lib/agent/tools/__tests__/registry.test.ts`
+Run: `npx vitest run src/lib/agent/tools/__tests__/registry.test.ts`
 
 Expected: FAIL — `buildToolRegistry` not exported.
 
@@ -2044,7 +2044,7 @@ export function buildToolRegistry(ctx: AgentToolContext) {
 
 - [ ] **Step 4: Run all tool tests to verify nothing regressed**
 
-Run: `pnpm test:run src/lib/agent/tools`
+Run: `npx vitest run src/lib/agent/tools`
 
 Expected: every test in the tools dir passes (registry test passes too).
 
@@ -2180,7 +2180,7 @@ describe('callPlanner', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/lib/agent/__tests__/planner.test.ts`
+Run: `npx vitest run src/lib/agent/__tests__/planner.test.ts`
 
 Expected: FAIL — module not found.
 
@@ -2281,7 +2281,7 @@ export async function callPlanner(input: CallPlannerInput): Promise<PlannerResul
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm test:run src/lib/agent/__tests__/planner.test.ts`
+Run: `npx vitest run src/lib/agent/__tests__/planner.test.ts`
 
 Expected: PASS, 4/4.
 
@@ -2426,7 +2426,7 @@ describe('runAgentLoop', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/lib/agent/__tests__/loop.test.ts`
+Run: `npx vitest run src/lib/agent/__tests__/loop.test.ts`
 
 Expected: FAIL — module not found.
 
@@ -2564,7 +2564,7 @@ export async function* runAgentLoop(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm test:run src/lib/agent/__tests__/loop.test.ts`
+Run: `npx vitest run src/lib/agent/__tests__/loop.test.ts`
 
 Expected: PASS, 5/5.
 
@@ -2680,7 +2680,7 @@ describe('POST /api/improve', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/app/api/improve/__tests__/route.test.ts`
+Run: `npx vitest run src/app/api/improve/__tests__/route.test.ts`
 
 Expected: FAIL — module not found.
 
@@ -2796,7 +2796,7 @@ export async function POST(req: Request): Promise<Response> {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm test:run src/app/api/improve/__tests__/route.test.ts`
+Run: `npx vitest run src/app/api/improve/__tests__/route.test.ts`
 
 Expected: PASS, 3/3.
 
@@ -2915,7 +2915,7 @@ describe('improve stage in pageReducer', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/lib/__tests__/pageReducer-improve.test.ts`
+Run: `npx vitest run src/lib/__tests__/pageReducer-improve.test.ts`
 
 Expected: FAIL — `initialState.stages.improve` does not exist.
 
@@ -3031,13 +3031,13 @@ Also add `improve: { phase: 'idle' }` into the `PIPELINE_START` and `RESET` rese
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm test:run src/lib/__tests__/pageReducer-improve.test.ts`
+Run: `npx vitest run src/lib/__tests__/pageReducer-improve.test.ts`
 
 Expected: PASS, 7/7.
 
 - [ ] **Step 5: Run all tests to confirm no regression**
 
-Run: `cd /Users/siddharthagrawal/evalforge && pnpm test:run`
+Run: `cd /Users/siddharthagrawal/evalforge && npx vitest run`
 
 Expected: every test passes.
 
@@ -3113,7 +3113,7 @@ describe('AgentTranscript', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/components/__tests__/AgentTranscript.test.tsx`
+Run: `npx vitest run src/components/__tests__/AgentTranscript.test.tsx`
 
 Expected: FAIL — module not found.
 
@@ -3180,7 +3180,7 @@ export default function AgentTranscript({ events }: { events: AgentEvent[] }) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm test:run src/components/__tests__/AgentTranscript.test.tsx`
+Run: `npx vitest run src/components/__tests__/AgentTranscript.test.tsx`
 
 Expected: PASS, 2/2.
 
@@ -3237,7 +3237,7 @@ describe('AgentDiff', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/components/__tests__/AgentDiff.test.tsx`
+Run: `npx vitest run src/components/__tests__/AgentDiff.test.tsx`
 
 Expected: FAIL — module not found.
 
@@ -3307,7 +3307,7 @@ export default function AgentDiff({ diff }: { diff: SnapshotDiff }) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm test:run src/components/__tests__/AgentDiff.test.tsx`
+Run: `npx vitest run src/components/__tests__/AgentDiff.test.tsx`
 
 Expected: PASS, 2/2.
 
@@ -3419,7 +3419,7 @@ describe('AgentPanel', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm test:run src/components/__tests__/AgentPanel.test.tsx`
+Run: `npx vitest run src/components/__tests__/AgentPanel.test.tsx`
 
 Expected: FAIL — module not found.
 
@@ -3510,7 +3510,7 @@ export default function AgentPanel({ state, triggerable, onImprove, onRestore }:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm test:run src/components/__tests__/AgentPanel.test.tsx`
+Run: `npx vitest run src/components/__tests__/AgentPanel.test.tsx`
 
 Expected: PASS, 6/6.
 
@@ -3667,7 +3667,7 @@ with:
 
 - [ ] **Step 4: Type-check**
 
-Run: `pnpm tsc --noEmit`
+Run: `npx tsc --noEmit`
 
 Expected: no errors. If `state.stages.improve` is missing, confirm Task 17 reducer changes are committed.
 
@@ -3690,7 +3690,7 @@ This task does not write code. It validates the whole pipeline works end-to-end 
 
 - [ ] **Step 1: Run the full test suite**
 
-Run: `pnpm test:run`
+Run: `npx vitest run`
 
 Expected: every existing test still passes plus the new agent tests. No skipped suites. No unhandled-promise warnings.
 
@@ -3698,13 +3698,13 @@ If anything fails, fix the offending task before continuing.
 
 - [ ] **Step 2: Type-check the whole repo**
 
-Run: `pnpm tsc --noEmit`
+Run: `npx tsc --noEmit`
 
 Expected: zero errors.
 
 - [ ] **Step 3: Boot the dev server**
 
-Run: `pnpm dev`
+Run: `npm run dev`
 
 Expected: server listening on `http://localhost:3000`. No build errors in the terminal.
 
@@ -3734,8 +3734,8 @@ Watch the dev server logs for errors. There should be none.
 
 Tick each item before opening the PR. If any is false, do not merge.
 
-- [ ] All vitest tests pass (`pnpm test:run` exits 0).
-- [ ] `pnpm tsc --noEmit` exits 0.
+- [ ] All vitest tests pass (`npx vitest run` exits 0).
+- [ ] `npx tsc --noEmit` exits 0.
 - [ ] Dev server boots without errors.
 - [ ] Smoke script in Step 4 runs to completion at least once on a real spec.
 - [ ] When the run is below threshold the AgentPanel offers the Improve button.
