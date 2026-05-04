@@ -59,6 +59,68 @@ export type AgentIteration = {
   weakestDeltaSinceLast: number;
 };
 
+// ──────────────────────────────────────────────────────────────────────────
+// Orchestrator (Sub-project 2)
+// ──────────────────────────────────────────────────────────────────────────
+
+export type OrchToolName =
+  | 'parse_spec'
+  | 'generate_tests'
+  | 'generate_rubric'
+  | 'run_eval_now'
+  | 'early_stop'
+  | ToolName;
+
+export type OrchBudget = {
+  capTokens: number;
+  capIterations: number;
+  capScoreThreshold: number;
+  spentTokens: number;
+  iterations: number;
+};
+
+export type OrchestratorState = {
+  parsed?: ParsedSpec;
+  tests?: TestCase[];
+  rubric?: Rubric;
+  results?: EvalResult[];
+  summary?: Summary;
+  history: OrchIteration[];
+  budget: OrchBudget;
+  earlyStopReason?: string;
+};
+
+export type OrchIteration = {
+  iteration: number;
+  toolName: OrchToolName;
+  args: unknown;
+  publicResult: unknown;
+  tokensSpentThisIteration: number;
+};
+
+export type OrchStopReason =
+  | 'all-pass'
+  | 'iteration-cap'
+  | 'budget-cap'
+  | 'early-stop';
+
+export type OrchestratorEvent =
+  | { type: 'orch-started'; budget: OrchBudget }
+  | { type: 'orch-iteration'; n: number }
+  | { type: 'orch-tool-call'; n: number; name: OrchToolName; args: unknown }
+  | { type: 'orch-tool-result'; n: number; name: OrchToolName; public: unknown }
+  | { type: 'orch-budget'; spentTokens: number; iterations: number }
+  | {
+      type: 'orch-state';
+      parsed?: ParsedSpec;
+      tests?: TestCase[];
+      rubric?: Rubric;
+      summary?: Summary;
+    }
+  | { type: 'orch-done'; reason: OrchStopReason; finalState: OrchestratorState }
+  | { type: 'orch-error'; message: string }
+  | { type: 'orch-aborted' };
+
 // SSE event payloads streamed by /api/improve.
 export type AgentEvent =
   | { type: 'started'; snapshot: Snapshot; threshold: number; maxIterations: number }

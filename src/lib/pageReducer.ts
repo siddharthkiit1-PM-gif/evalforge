@@ -8,6 +8,7 @@ import type {
   TestCase,
 } from '@/lib/types';
 import type { AgentEvent, AgentState, Snapshot, SnapshotDiff } from '@/lib/agent/types';
+import type { OrchestratorEvent, OrchestratorState, OrchStopReason } from '@/lib/agent/types';
 
 export type StagePhase =
   | 'idle'
@@ -31,7 +32,13 @@ export type ImproveStageState =
   | { phase: 'done-rolled-back'; events: AgentEvent[]; snapshot: Snapshot; restored: Snapshot }
   | { phase: 'error'; events: AgentEvent[]; snapshot: Snapshot | null; message: string };
 
-export type StageKey = 'parse' | 'tests' | 'rubric' | 'run' | 'improve';
+export type OrchestrateStageState =
+  | { phase: 'idle' }
+  | { phase: 'running'; events: OrchestratorEvent[]; latest: Partial<OrchestratorState> }
+  | { phase: 'done'; events: OrchestratorEvent[]; reason: OrchStopReason; finalState: OrchestratorState }
+  | { phase: 'error'; events: OrchestratorEvent[]; message: string };
+
+export type StageKey = 'parse' | 'tests' | 'rubric' | 'run' | 'improve' | 'orchestrate';
 
 export type PageState = {
   spec: string;
@@ -41,6 +48,7 @@ export type PageState = {
     rubric: StageState<Rubric>;
     run: StageState<RunSnapshot>;
     improve: ImproveStageState;
+    orchestrate: OrchestrateStageState;
   };
   error: { stage: StageKey; message: string; recoverable: boolean } | null;
 };
@@ -54,7 +62,10 @@ export type PageAction =
   | { type: 'RESET' }
   | { type: 'IMPROVE_START' }
   | { type: 'IMPROVE_EVENT'; event: AgentEvent }
-  | { type: 'IMPROVE_RESET' };
+  | { type: 'IMPROVE_RESET' }
+  | { type: 'ORCHESTRATE_START'; spec: string }
+  | { type: 'ORCHESTRATE_EVENT'; event: OrchestratorEvent }
+  | { type: 'ORCHESTRATE_RESET' };
 
 const idleStage = <T>(): StageState<T> => ({
   phase: 'idle',
@@ -71,6 +82,7 @@ export const initialState: PageState = {
     rubric: idleStage<Rubric>(),
     run: idleStage<RunSnapshot>(),
     improve: { phase: 'idle' },
+    orchestrate: { phase: 'idle' },
   },
   error: null,
 };
@@ -227,6 +239,48 @@ export function reducer(state: PageState, action: PageAction): PageState {
     }
     case 'IMPROVE_RESET': {
       return { ...state, stages: { ...state.stages, improve: { phase: 'idle' } } };
+    }
+    case 'ORCHESTRATE_START': {
+      return {
+        ...initialState,
+        spec: action.spec,
+        stages: {
+          ...initialState.stages,
+          orchestrate: { phase: 'running', events: [], latest: {} },
+        },
+      };
+    }
+    case 'ORCHESTRATE_EVENT': {
+      const cur = state.stages.orchestrate;
+      const events =
+        cur.phase === 'idle' ? [action.event] : [...(cur as { events?: OrchestratorEvent[] }).events ?? [], action.event];
+      const prevLatest = cur.phase === 'running' ? cur.latest : {};
+      let latest = prevLatest;
+      if (action.event.type === 'orch-state') {
+        latest = {
+          ...prevLatest,
+          parsed: action.event.parsed ?? prevLatest.parsed,
+          tests: action.event.tests ?? prevLatest.tests,
+          rubric: action.event.rubric ?? prevLatest.rubric,
+          summary: action.event.summary ?? prevLatest.summary,
+        };
+      }
+
+      let next: OrchestrateStageState = { phase: 'running', events, latest };
+      if (action.event.type === 'orch-done') {
+        next = {
+          phase: 'done',
+          events,
+          reason: action.event.reason,
+          finalState: action.event.finalState,
+        };
+      } else if (action.event.type === 'orch-error') {
+        next = { phase: 'error', events, message: action.event.message };
+      }
+      return { ...state, stages: { ...state.stages, orchestrate: next } };
+    }
+    case 'ORCHESTRATE_RESET': {
+      return { ...state, stages: { ...state.stages, orchestrate: { phase: 'idle' } } };
     }
     default:
       return state;
