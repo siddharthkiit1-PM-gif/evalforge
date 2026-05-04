@@ -39,8 +39,12 @@ class MemoryBackend implements Backend {
 
 function getBackend(): Backend {
   if (cached) return cached;
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  // Vercel Marketplace's Upstash integration provisions KV_REST_API_*; the
+  // upstream Upstash docs use UPSTASH_REDIS_REST_*. Accept both.
+  const url =
+    process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
+  const token =
+    process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
   if (url && token) {
     const redis = new Redis({ url, token });
     cached = {
@@ -51,7 +55,7 @@ function getBackend(): Backend {
   } else {
     if (process.env.NODE_ENV === 'production') {
       console.warn(
-        '[orchState] UPSTASH_REDIS_REST_URL/TOKEN not set — falling back to in-memory store. Pause/resume will only work for requests hitting the same instance.',
+        '[orchState] KV_REST_API_URL/TOKEN not set — falling back to in-memory store. Pause/resume will only work for requests hitting the same instance.',
       );
     }
     cached = new MemoryBackend();
