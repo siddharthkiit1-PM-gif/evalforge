@@ -364,6 +364,7 @@ export default function Home() {
       {state.stages.orchestrate.phase !== 'idle' && (
         <OrchestratorPanel
           state={state.stages.orchestrate}
+          spec={state.spec}
           onReset={() => dispatch({ type: 'ORCHESTRATE_RESET' })}
           onResume={(id, answer) => void resumeOrchestrate(id, answer)}
         />

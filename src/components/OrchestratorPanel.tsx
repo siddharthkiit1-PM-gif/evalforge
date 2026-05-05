@@ -2,7 +2,11 @@
 
 import { useState } from 'react';
 import type { OrchestrateStageState } from '@/lib/pageReducer';
-import type { OrchestratorEvent, OrchToolName } from '@/lib/agent/types';
+import type { OrchestratorEvent, OrchestratorState, OrchToolName } from '@/lib/agent/types';
+import DomainBadge from '@/components/DomainBadge';
+import TestSuiteTable from '@/components/TestSuiteTable';
+import RubricPanel from '@/components/RubricPanel';
+import Scorecard from '@/components/Scorecard';
 
 type Row = {
   n: number;
@@ -61,10 +65,12 @@ const REASON_LABEL: Record<string, string> = {
 
 export default function OrchestratorPanel({
   state,
+  spec,
   onReset,
   onResume,
 }: {
   state: OrchestrateStageState;
+  spec: string;
   onReset: () => void;
   onResume: (id: string, answer: string) => void;
 }) {
@@ -73,12 +79,20 @@ export default function OrchestratorPanel({
   const events = state.events;
   const rows = rowsFromEvents(events);
   const { spentTokens, iterations, cap } = latestBudget(events);
-  const summary =
+
+  // Pull artifacts from finalState (when done) or latest (while streaming).
+  const live: Partial<OrchestratorState> =
     state.phase === 'done'
-      ? state.finalState.summary
+      ? state.finalState
       : state.phase === 'running' || state.phase === 'awaiting-clarification'
-        ? state.latest.summary
-        : undefined;
+        ? state.latest
+        : {};
+  const parsed = live.parsed;
+  const tests = live.tests;
+  const rubric = live.rubric;
+  const summary = live.summary;
+  const results = state.phase === 'done' ? state.finalState.results : undefined;
+  const showScorecard = !!(results && rubric && parsed && tests);
 
   return (
     <section className="flex flex-col gap-4 rounded-md border border-border bg-bg p-4">
@@ -121,7 +135,7 @@ export default function OrchestratorPanel({
         />
       )}
 
-      {summary && (
+      {summary && !showScorecard && (
         <div className="rounded-md border border-border bg-surface p-3 font-mono text-xs">
           <div className="flex items-baseline justify-between">
             <span className="text-muted">overall</span>
@@ -138,6 +152,45 @@ export default function OrchestratorPanel({
             ))}
           </ul>
         </div>
+      )}
+
+      {parsed && (
+        <section className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-sm text-fg">Parsed spec</h3>
+            <DomainBadge domain={parsed.domain} />
+          </div>
+          <div className="rounded-md border border-border bg-surface p-3 font-mono text-xs text-muted whitespace-pre-wrap">
+            {JSON.stringify(parsed, null, 2)}
+          </div>
+        </section>
+      )}
+
+      {tests && tests.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h3 className="font-display text-sm text-fg">Test suite ({tests.length})</h3>
+          <TestSuiteTable tests={tests} />
+        </section>
+      )}
+
+      {rubric && (
+        <section className="flex flex-col gap-2">
+          <h3 className="font-display text-sm text-fg">Rubric</h3>
+          <RubricPanel rubric={rubric} />
+        </section>
+      )}
+
+      {showScorecard && parsed && tests && rubric && results && (
+        <section className="flex flex-col gap-2">
+          <h3 className="font-display text-sm text-fg">Results</h3>
+          <Scorecard
+            results={results}
+            rubric={rubric}
+            spec={spec}
+            parsed={parsed}
+            tests={tests}
+          />
+        </section>
       )}
 
       {state.phase === 'done' && (
